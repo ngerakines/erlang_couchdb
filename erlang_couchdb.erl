@@ -1,9 +1,22 @@
+%% @todo Create eUnit tests
+%% @todo Add better documentation
+%% @todo Merge erlang_couchdb:view_url/6 into erlang_couchdb:build_url/4
+%% @author Nick Gerakines <nick@gerakines.net>
+%% @copyright 2008 Nick Gerakines
+%% @version 0.1r1
 %% @doc A simple CouchDB client.
+%% 
+%% This module was created for the purpose of creating a very small and light
+%% CouchDB interface. It supports a limited number of API methods and features.
+%% 
+%% This module was built for use in the I Play WoW Facebook Application and
+%% website. Support is limited and features will be added as needed by the
+%% developer/website.
 -module(erlang_couchdb).
 -behaviour(gen_server).
 
 -author("Nick Gerakines <nick@gerakines.net>").
--version("0.1").
+-version("0.1r1").
 
 %% gen_server exports
 -export([
@@ -175,6 +188,7 @@ view_url(Host, Port, Database, ViewName, ViewId, Args) ->
     lists:concat(["http://", Host, ":", Port, "/", Database, "/_view/", ViewName, "/", ViewId, build_querystring(Args, [])]).
 
 %% @private
+%% @doc Builds a querystring and url encodes key/value pairs.
 build_querystring([], Acc) -> Acc;
 build_querystring([{Key, Value} | Tail], []) ->
     Acc = lists:concat(["?", Key, "=", yaws_api:url_encode(Value)]),
@@ -187,6 +201,12 @@ build_querystring([{Key, Value} | Tail], Acc) ->
 %% ---
 %% Public Functions / API
 
+%% @spec start(Name, Host, Port) -> Result
+%% where 
+%%       Name = atom()
+%%       Host = string()
+%%       Port = string()
+%%       Result = {ok, pid()} | {error, any()}
 %% @doc Start a server to handle CouchDB requests.
 start(Name, Host, Port) ->
     inets:start(),
@@ -195,3 +215,4 @@ start(Name, Host, Port) ->
 %% @doc Send a request to a couchdb server.
 call(Name, Request) ->
     gen_server:call(Name, Request, infinity).
+
