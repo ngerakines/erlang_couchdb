@@ -1,0 +1,197 @@
+%% @doc A simple CouchDB client.
+-module(erlang_couchdb).
+-behaviour(gen_server).
+
+-author("Nick Gerakines <nick@gerakines.net>").
+-version("0.1").
+
+%% gen_server exports
+-export([
+    init/1, terminate/2, code_change/3,
+    handle_call/3, handle_cast/2, handle_info/2
+]).
+
+%% public functions and API
+-export([start/3, call/2]).
+
+%% @private
+init([Host, Port]) ->
+    {ok, {Host, Port}}.
+
+%% @private
+handle_call({info}, _From, State) ->
+    {reply, State, State};
+
+handle_call({url, Database, Request}, _From, State = {Host, Port}) ->
+    Url = build_url(Host, Port, Database, Request),
+    {reply, Url, State};
+
+handle_call({server_info}, _From, State = {Host, Port}) ->
+    Url = build_url(Host, Port),
+    Response = submit_request(get, Url, 0),
+    {reply, Response, State};
+
+handle_call({database_info, Database}, _From, State = {Host, Port}) ->
+    Url = build_url(Host, Port, Database),
+    Response = submit_request(get, Url, 0),
+    {reply, Response, State};
+
+handle_call({create_database, Database}, _From, State = {Host, Port}) ->
+    Url = build_url(Host, Port, Database),
+    Response = submit_request(put, Url, ""),
+    {reply, Response, State};
+
+handle_call({fetch_document, Database, DocID}, _From, State = {Host, Port}) ->
+    Url = build_url(Host, Port, Database, DocID),
+    Response = submit_request(get, Url, []),
+    {reply, Response, State};
+
+handle_call({view_document, Database, ViewClass, ViewId, Args}, _From, State = {Host, Port}) ->
+    Url = view_url(Host, Port, Database, ViewClass, ViewId, Args),
+    Response = submit_request(get, Url, []),
+    {reply, Response, State};
+
+handle_call({create_document, Database, DocID, Properties}, _From, State = {Host, Port}) ->
+    Url = build_url(Host, Port, Database, DocID),
+    JSON = case Properties of 
+        List when is_list(List) -> rfc4627:encode({obj, Properties});
+        Obj when is_tuple(Obj) ->rfc4627:encode(Properties)
+    end,
+    Response = submit_request(put, Url, JSON),
+    {reply, Response, State};
+
+handle_call({create_document, Database, Properties}, _From, State = {Host, Port}) ->
+    Url = build_url(Host, Port, Database),
+    JSON = case Properties of 
+        List when is_list(List) -> rfc4627:encode({obj, Properties});
+        Obj when is_tuple(Obj) ->rfc4627:encode(Properties)
+    end,
+    Response = submit_request(post, Url, JSON),
+    {reply, Response, State};
+
+handle_call({create_view, Database, DesignString, Properties}, _From, State = {Host, Port}) ->
+    Url = build_url(Host, Port, Database, DesignString),
+    JSON = case Properties of 
+        List when is_list(List) -> rfc4627:encode({obj, Properties});
+        Obj when is_tuple(Obj) ->rfc4627:encode(Properties)
+    end,
+    Response = submit_request(put, Url, JSON),
+    {reply, Response, State};
+
+handle_call({update_document, Database, DocID, Properties}, _From, State = {Host, Port}) ->
+    Url = build_url(Host, Port, Database, DocID),
+    OldData = submit_request(get, Url, []),
+    NewProperties =  lists:foldl(
+        fun({Key, Value}, Acc) ->
+            case lists:keymember(Key, 1, Acc) of
+                true -> lists:keyreplace(Key, 1, Acc, {Key, Value});
+                false -> [{Key, Value} | Acc]
+            end
+        end,
+        OldData,
+        Properties
+    ),
+    Response = submit_request(put, Url, rfc4627:encode({obj, NewProperties})),
+    {reply, Response, State};
+
+handle_call(stop, _From, State) -> {stop, normalStop, State};
+
+handle_call(_, _From, State) -> {reply, ok, State}.
+
+%% @private
+handle_cast(_Msg, State) -> {noreply, State}.
+
+%% @private
+handle_info(_Info, State) -> {noreply, State}.
+
+%% @private
+terminate(_Reason, _State) -> ok.
+
+%% @private
+code_change(_OldVsn, State, _Extra) -> {ok, State}.
+
+%% ---
+%% Private functions
+
+%% @private
+submit_request(get, Url, _) ->
+    io:format("get ~p~n", [Url]),
+    case http:request(get, {Url, []}, [], []) of
+        {ok, {_Status, _Headers, Body}} ->
+            case rfc4627:decode(Body) of
+                {ok,{obj, Results}, _} -> Results;
+                _ -> {error, parse_error}
+            end;
+        F -> {error, F}
+    end;
+
+submit_request(put, Url, Body) ->
+    io:format("put ~p~n", [Url]),
+    case http:request(put, {Url, [], "application/json", Body} , [], []) of
+        {ok, {_Status, _Headers, ResponseBody}} ->
+            case rfc4627:decode(ResponseBody) of
+                {ok,{obj, Results}, _} -> Results;
+                _ -> {error, parse_error}
+            end;
+        F -> {error, F}
+    end;
+
+submit_request(post, Url, Body) ->
+    io:format("post ~p~n", [Url]),
+    case http:request(post, {Url, [], "application/json", Body} , [], []) of
+        {ok, {_Status, _Headers, ResponseBody}} ->
+            case rfc4627:decode(ResponseBody) of
+                {ok,{obj, Results}, _} -> Results;
+                _ -> {error, parse_error}
+            end;
+        F -> {error, F}
+    end;
+
+submit_request(delete, Url, _) ->
+    io:format("delete ~p~n", [Url]),
+    case http:request(delete, {Url, []}, [], []) of
+        {ok, {_Status, _Headers, Body}} ->
+            case rfc4627:decode(Body) of
+                {ok,{obj, Results}, _} -> Results;
+                _ -> {error, parse_error}
+            end;
+        F -> {error, F}
+    end.
+
+%% @private
+build_url(Host, Port) ->
+    lists:concat(["http://", Host, ":", Port, "/"]).
+
+%% @private
+build_url(Host, Port, Database) ->
+    lists:concat(["http://", Host, ":", Port, "/", Database, "/"]).
+
+%% @private
+build_url(Host, Port, Database, Request) ->
+    lists:concat(["http://", Host, ":", Port, "/", Database, "/", Request]).
+
+%% @private
+view_url(Host, Port, Database, ViewName, ViewId, Args) ->
+    lists:concat(["http://", Host, ":", Port, "/", Database, "/_view/", ViewName, "/", ViewId, build_querystring(Args, [])]).
+
+%% @private
+build_querystring([], Acc) -> Acc;
+build_querystring([{Key, Value} | Tail], []) ->
+    Acc = lists:concat(["?", Key, "=", yaws_api:url_encode(Value)]),
+    build_querystring(Tail, Acc);
+build_querystring([{Key, Value} | Tail], Acc) ->
+    NewAcc = lists:concat([Acc, "&", Key, "=", yaws_api:url_encode(Value)]),
+    build_querystring(Tail, NewAcc).
+
+
+%% ---
+%% Public Functions / API
+
+%% @doc Start a server to handle CouchDB requests.
+start(Name, Host, Port) ->
+    inets:start(),
+    gen_server:start_link({local, Name}, ?MODULE, [Host, Port], []).
+
+%% @doc Send a request to a couchdb server.
+call(Name, Request) ->
+    gen_server:call(Name, Request, infinity).
