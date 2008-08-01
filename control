@@ -9,3 +9,4 @@ Installed-Size: 1024
 Maintainer: Nick Gerakines <nick@gerakines.net>
 Provides: libcouchdbclient-erlang
 Description: A simple CouchDB client (in Erlang).
+
