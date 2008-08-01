@@ -1,4 +1,3 @@
-<<<<<<< HEAD:src/erlang_couchdb.erl
 %% Copyright (c) 2008 Nick Gerakines <nick@gerakines.net>
 %% 
 %% Permission is hereby granted, free of charge, to any person
