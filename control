@@ -1,12 +1,11 @@
 Package: libcouchdbclient-erlang
-Version: 0.1
+Version: 0.2.1
 Section: web 
 Priority: optional
 Architecture: all
 Essential: no
-Depends: erlang, librfc4627-erlang
+Depends: erlang, mochiweb-erlang
 Installed-Size: 1024
 Maintainer: Nick Gerakines <nick@gerakines.net>
 Provides: libcouchdbclient-erlang
 Description: A simple CouchDB client (in Erlang).
-

@@ -1,6 +1,4 @@
-erlang\_couchdb is a really simple CouchDB client. It uses inets and the rfc4627 to create, dispatch, encode and parse requests to and from a CouchDB server. It also uses yaws:url\_encode/1.
-
-I developed this module because the existing modules seemed too big for my taste. This module implements a very simple gen\_server model to let you create a process representing a CouchDB connection that actions can be sent to.
+erlang\_couchdb is a really simple CouchDB client. Simple means that it does as little as possible and doesn't get in the way. I developed this module because the existing modules seemed too big and did too much for my taste. This module provides several public functions to do things like manipulating databases, documents and views.
 
 The implemented functionality is really limited because I'm only really implementing the stuff that I'm using in I Play WoW.
 
@@ -11,41 +9,19 @@ The implemented functionality is really limited because I'm only really implemen
 * Create document with specific ID
 * Update document
 * Get document
-* Get all database documents (via get document where id is "\_all\_docs")
 * Create design document
-* Execute view
+* Invoke a design document
 
 A quick demo:
 
-    erlang_couchdb:start(local, "127.0.0.1", "5984").
-    erlang_couchdb:call(local, {server_info}).
-    erlang_couchdb:call(local, {create_database, "ngerakines"}).
-    erlang_couchdb:call(local, {database_info, "ngerakines"}).
-    erlang_couchdb:call(local, {fetch_document, "ngerakines", "aabbccddeeffgg112233445566"}).
-    erlang_couchdb:call(local, {create_document, "ngerakines", [{"type", <<"spouse">>}, {"name", <<"Carolyn">>}]}).
-    erlang_couchdb:call(local, {fetch_document, "ngerakines", "_all_docs"}).
-    [_, {"id", VavId}, _] = erlang_couchdb:call(local, {create_document, "ngerakines", [{"type", <<"child">>}, {"name", <<"Vanessa">>}, {"age", 1.9}]}).
-    FamilyDesign = {obj, [
-        {"_id", <<"_design/family">>},
-        {"language", <<"javascript">>},
-        {"views", {obj, [
-            {"all", {obj, [ {"map", <<"function(doc) { if (doc.type == 'child') { emit(null, doc); } else if (doc.type == 'spouse') { emit(null, doc); } }">>} ]}},
-            {"children", {obj, [ {"map", <<"function(doc) { if (doc.type == 'child')  emit(doc.name, doc) }">>} ]}}
-        ]}}
-    ]}.
-    erlang_couchdb:call(local, {create_document, "ngerakines", "_design/family", FamilyDesign}).
-    erlang_couchdb:call(local, {view_document, "ngerakines", "family", "all", []}).
-    erlang_couchdb:call(local, {view_document, "ngerakines", "family", "children", []}).
-    erlang_couchdb:call(local, {view_document, "ngerakines", "family", "children", [{"key", "\"Vanessa\""}]}).
-    erlang_couchdb:call(local, {view_document, "ngerakines", "family", "children", [{"key", "\"Unknown\""}]}).
-    erlang_couchdb:call(local, {update_document, "ngerakines", binary_to_list(VavId), [{"age", 2}]}).
-
-TODO list:
-
-* Support updating design documents.
-* Add better documentation.
-* Add test code.
-* Determine if the rfc4627 module is available.
-* Determine if the yaws\_api is available.
+    erlang_couchdb:create_database({"localhost", 5984}, "iplaywow").
+    erlang_couchdb:database_info({"localhost", 5984}, "iplaywow").
+    erlang_couchdb:server_info({"localhost", 5984}).
+    erlang_couchdb:create_document({"localhost", 5984}, "iplaywow", [{<<"name">>, <<"Korale">>}, {<<"type">>}, <<"character">>}]).
+    erlang_couchdb:retrieve_document({"localhost", 5984}, "iplaywow", "0980...").
+    erlang_couchdb:update_document({"localhost", 5984}, "iplaywow", "0980...", [{<<"_rev">>, <<"3419...">>}, {<<"name">>, <<"Korale">>}, {<<"level">>, <<"70">>}, {<<"type">>}, <<"character">>}]).
+    erlang_couchdb:delete_document({"localhost", 5984}, "iplaywow", "1fd0...", "1193...").
+    erlang_couchdb:create_view({"localhost", 5984}, "iplaywow", "characters", <<"javascript">>, [{<<"realm">>, <<"function(doc) { if (doc.type == 'character')  emit(doc.realm_full, null) }">>}]).
+    erlang_couchdb:invoke_view({"localhost", 5984}, "iplaywow", "characters", "realm", [{"key", "\"Medivh-US\""}]).
 
 Patches are welcome. For the time being this module should be considered alpha. Support is limited but feel free to contact me via email and submit patches. If you use this module please let me know.
