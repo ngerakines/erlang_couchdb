@@ -51,8 +51,9 @@
 
 -export([create_database/2, database_info/2, server_info/1, create_document/3]).
 -export([retrieve_document/3, retrieve_document/4, update_document/4, delete_document/4]).
--export([create_view/5, create_view/6, invoke_view/5]).
--export([raw_request/5]).
+-export([create_view/5, create_view/6, invoke_view/5, delete_documents/3]).
+-export([raw_request/5, fetch_ids/2]).
+-export([parse_view/1]).
 
 %% @private
 %% Instead of using ibrowse or http:request/4, this module uses
@@ -62,10 +63,22 @@ raw_request(Type, Server, Port, URI, Body) ->
     {ok, Socket} = gen_tcp:connect(Server, Port, [binary, {active, false}, {packet, 0}]),
     Req = build_request(Type, URI, Body),
     gen_tcp:send(Socket, Req),
-    {ok, Resp} = gen_tcp:recv(Socket, 0),
+    {ok, Resp} = do_recv(Socket, []),
     gen_tcp:close(Socket),
     {ok,_, ResponseBody} = erlang:decode_packet(http, Resp, []),
     decode_json(parse_response(ResponseBody)).
+
+do_recv(Sock, Bs) ->
+    %% io:format("do_recv(~p, ~p)~n", [Sock, Bs]),
+    case gen_tcp:recv(Sock, 0) of
+        {ok, B} ->
+            %% io:format("Read '~p' from Socket.~n", [B]),
+            do_recv(Sock, [Bs | B]);
+        {error, closed} ->
+            {ok, erlang:iolist_to_binary(Bs)};
+        {error, ebadf} ->
+            {ok, list_to_binary(Bs)}
+    end.
 
 %% @private
 %% For a given http response, disregard everything up to the first new line
@@ -104,7 +117,7 @@ build_uri() ->
 
 %% @private
 build_uri(Database) ->
-    lists:concat(["/", Database, "/"]).
+    lists:concat(["/", Database]).
 
 %% @private
 build_uri(Database, Request) ->
@@ -187,6 +200,17 @@ delete_document({Server, ServerPort}, Database, DocID, Revision) when is_list(Se
     Url = build_uri(Database, DocID, [{"rev", Revision}]),
     raw_request("DELETE", Server, ServerPort, Url, []).
 
+%% @doc Delete a bunch of documents with a _bulk_docs request.
+delete_documents({Server, ServerPort}, Database, Documents) when is_list(Server), is_integer(ServerPort) ->
+    Url = build_uri(Database, "_bulk_docs"),
+    BulkDelete = {struct, [
+        {<<"docs">>, [
+            {struct, [{<<"_id">>, Id}, {<<"_rev">>, Rev}, {<<"_deleted">>, true}]} || {Id, Rev} <- Documents
+        ]}
+    ]},
+    JSON = list_to_binary(mochijson2:encode(BulkDelete)),
+    raw_request("POST", Server, ServerPort, Url, JSON).
+
 %% @doc Creates a design document. See create_view/6 for more.
 create_view({Server, ServerPort}, Database, ViewClass, Language, Views) ->
     create_view({Server, ServerPort}, Database, ViewClass, Language, Views, []).
@@ -218,3 +242,20 @@ create_view({Server, ServerPort}, Database, ViewClass, Language, Views, Attribut
 invoke_view({Server, ServerPort}, Database, ViewClass, ViewId, Attributes) when is_list(Server), is_integer(ServerPort) ->
     Url = view_uri(Database, ViewClass, ViewId, Attributes),
     raw_request("GET", Server, ServerPort, Url, []).
+
+%% @doc Return a list of document ids for a given view.
+parse_view({json, Structure}) ->
+    {struct, Properties} = Structure,
+    [{_, TotalRows}, {_, Offset}, {_, Data}] = Properties,
+    Ids = [begin
+        {struct, Bits} = Rec,
+        [{<<"id">>, Id} | _] = Bits,
+        Id
+    end || Rec <- Data],
+    {TotalRows, Offset, Ids};
+parse_view(Other) -> Other.
+
+fetch_ids({Server, ServerPort}, Limit) ->
+    Url = build_uri(lists:concat(["_uuids?count=", Limit])),
+    io:format("Url ~p~n", [Url]),
+    raw_request("POST", Server, ServerPort, Url, []).
