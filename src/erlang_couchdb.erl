@@ -22,6 +22,10 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 %% 
 %% Change Log:
+%% * v0.2.2 2008-10-25: ngerakines
+%%   - Applied a patch from Pablo Sortino <psortino@novamens.com> that
+%%     provides bulk document creation.
+%%   - Created accessor function to create a new document with an ID.
 %% * v0.2.1 2008-10-05: ngerakines
 %%   - Complete rewrite with reduced module size.
 %%   - Moved away from the rfc4627 module and to mochijson2.
@@ -41,19 +45,20 @@
 %% website. Support is limited and features will be added as needed by the
 %% developer/website.
 %% 
-%% Updates at http://github.com/ngerakines/erlang_couchdb/
+%% This code is available as Open Source Software under the MIT license.
 %% 
-%% @todo Use gen_tcp instead of inets for http requests.
+%% Updates at http://github.com/ngerakines/erlang_couchdb/
 -module(erlang_couchdb).
 
 -author("Nick Gerakines <nick@gerakines.net>").
--version("Version: 0.2.1").
+-version("Version: 0.2.2").
 
--export([create_database/2, database_info/2, server_info/1, create_document/3]).
--export([retrieve_document/3, retrieve_document/4, update_document/4, delete_document/4]).
--export([create_view/5, create_view/6, invoke_view/5, delete_documents/3]).
--export([raw_request/5, fetch_ids/2]).
--export([parse_view/1]).
+-export([create_database/2, database_info/2, server_info/1]).
+-export([create_document/3, create_document/4, create_documents/3]).
+-export([retrieve_document/3, retrieve_document/4]).
+-export([update_document/4, delete_document/4, delete_documents/3]).
+-export([create_view/5, create_view/6, invoke_view/5]).
+-export([raw_request/5, fetch_ids/2, parse_view/1]).
 
 %% @private
 %% Instead of using ibrowse or http:request/4, this module uses
@@ -69,15 +74,11 @@ raw_request(Type, Server, Port, URI, Body) ->
     decode_json(parse_response(ResponseBody)).
 
 do_recv(Sock, Bs) ->
-    %% io:format("do_recv(~p, ~p)~n", [Sock, Bs]),
     case gen_tcp:recv(Sock, 0) of
         {ok, B} ->
-            %% io:format("Read '~p' from Socket.~n", [B]),
             do_recv(Sock, [Bs | B]);
         {error, closed} ->
-            {ok, erlang:iolist_to_binary(Bs)};
-        {error, ebadf} ->
-            {ok, list_to_binary(Bs)}
+            {ok, erlang:iolist_to_binary(Bs)}
     end.
 
 %% @private
@@ -173,6 +174,25 @@ server_info({Server, ServerPort}) when is_list(Server), is_integer(ServerPort) -
 create_document({Server, ServerPort}, Database, Attributes) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database),
     JSON = list_to_binary(mochijson2:encode({struct, Attributes})),
+    raw_request("POST", Server, ServerPort, Url, JSON).
+
+%% @doc Create a new document with a specific document ID. This is just an
+%% accessor function to update_document/4 when the intent is to create a 
+%% new document.
+create_document({Server, ServerPort}, Database, DocumentID, Attributes) when is_list(Server), is_integer(ServerPort) ->
+    update_document({Server, ServerPort}, Database, DocumentID, Attributes).
+
+%% @doc Create many documents in bulk.
+%% This function created and submitted by Pablo Sortino
+%% <psortino@novamens.com> and applied on 2008-10-25 by Nick Gerakines.
+create_documents({Server, ServerPort}, Database, Documents) when is_list(Server), is_integer(ServerPort) ->
+    Url = build_uri(Database, "_bulk_docs"),
+    BulkCreate = {struct, [
+        {<<"docs">>, [
+            {struct, Doc} || Doc <- Documents
+        ]}
+    ]},
+    JSON = list_to_binary(mochijson2:encode(BulkCreate)),
     raw_request("POST", Server, ServerPort, Url, JSON).
 
 %% @doc Fetches a document by it's id.
