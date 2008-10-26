@@ -53,11 +53,12 @@
 -author("Nick Gerakines <nick@gerakines.net>").
 -version("Version: 0.2.2").
 
--export([create_database/2, database_info/2, server_info/1]).
+-export([server_info/1]).
+-export([create_database/2, database_info/2, delete_database/2]).
 -export([create_document/3, create_document/4, create_documents/3]).
--export([retrieve_document/3, retrieve_document/4]).
+-export([retrieve_document/3, retrieve_document/4, document_revision/3]).
 -export([update_document/4, delete_document/4, delete_documents/3]).
--export([create_view/5, create_view/6, invoke_view/5]).
+-export([create_view/5, create_view/6, invoke_view/5, load_view/4]).
 -export([raw_request/5, fetch_ids/2, parse_view/1]).
 
 %% @private
@@ -158,6 +159,11 @@ create_database({Server, ServerPort}, Database) when is_list(Server), is_integer
     Url = build_uri(Database),
     raw_request("PUT", Server, ServerPort, Url, []).
 
+%% @doc Create a new database.
+delete_database({Server, ServerPort}, Database) when is_list(Server), is_integer(ServerPort) ->
+    Url = build_uri(Database),
+    raw_request("DELETE", Server, ServerPort, Url, []).
+
 %% @doc Get info about a database.
 database_info({Server, ServerPort}, Database) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database),
@@ -194,6 +200,20 @@ create_documents({Server, ServerPort}, Database, Documents) when is_list(Server)
     ]},
     JSON = list_to_binary(mochijson2:encode(BulkCreate)),
     raw_request("POST", Server, ServerPort, Url, JSON).
+
+%% @doc Return a tuple containing a document id and the document's latest
+%% revision.
+document_revision({Server, ServerPort}, Database, DocID) when is_binary(DocID) ->
+    document_revision({Server, ServerPort}, Database, binary_to_list(DocID));
+document_revision({Server, ServerPort}, Database, DocID) when is_list(Server), is_integer(ServerPort) ->
+    Url = build_uri(Database, DocID, []),
+    JSON = raw_request("GET", Server, ServerPort, Url, []),
+    case JSON of
+        {json,{struct, Props}} ->
+            {ok, proplists:get_value(<<"_id">>, Props), proplists:get_value(<<"_rev">>, Props)};
+        _ -> {error, JSON}
+    end.
+
 
 %% @doc Fetches a document by it's id.
 retrieve_document({Server, ServerPort}, Database, DocID) ->
@@ -264,18 +284,36 @@ invoke_view({Server, ServerPort}, Database, ViewClass, ViewId, Attributes) when 
     raw_request("GET", Server, ServerPort, Url, []).
 
 %% @doc Return a list of document ids for a given view.
+parse_view({json, {struct, [{<<"error">>, _Code}, {_, _Reason}]}}) ->
+    {0, 0, []};
 parse_view({json, Structure}) ->
     {struct, Properties} = Structure,
-    [{_, TotalRows}, {_, Offset}, {_, Data}] = Properties,
+    {TotalRows, Offset, Data} = case Properties of
+        [{_, A}, {_, B}, {_, C}] -> {A, B, C};
+        [{_, A}, {_, B}] -> {A, B, []};
+        _ -> {0, 0, []}
+    end,
     Ids = [begin
         {struct, Bits} = Rec,
         [{<<"id">>, Id} | _] = Bits,
         Id
     end || Rec <- Data],
     {TotalRows, Offset, Ids};
-parse_view(Other) -> Other.
+parse_view(_Other) -> {0, 0, []}.
 
+%% @doc Fetch a number of UUIDs from a CouchDB server.
 fetch_ids({Server, ServerPort}, Limit) ->
     Url = build_uri(lists:concat(["_uuids?count=", Limit])),
     io:format("Url ~p~n", [Url]),
     raw_request("POST", Server, ServerPort, Url, []).
+
+%% @doc Create a design document based on a file's contents.
+%% Warning! This function is experimental.
+load_view({Server, ServerPort}, Database, ViewName, File) ->
+    {ok, FH2} = file:open(File, [read, binary]),
+    {ok, Data2} = file:read(FH2, 9999),
+    erlang_couchdb:create_document(
+        {Server, ServerPort}, Database,
+        "_design/" ++ ViewName,
+        [{<<"language">>, <<"javascript">>}, {<<"views">>, mochijson2:decode(Data2)}]
+    ).
