@@ -22,6 +22,13 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 %% 
 %% Change Log:
+%% * v0.2.3 2008-10-26: ngerakines
+%%   - Added ability to delete databases.
+%%   - Added function to fetch Document by ID and return it's Document
+%%     ID and revision.
+%%   - Added experimental function to create design documents based on
+%%     a .js file's contents.
+%%   - Fixed bug in parse_view/1 when error is returned.
 %% * v0.2.2 2008-10-25: ngerakines
 %%   - Applied a patch from Pablo Sortino <psortino@novamens.com> that
 %%     provides bulk document creation.
@@ -51,7 +58,7 @@
 -module(erlang_couchdb).
 
 -author("Nick Gerakines <nick@gerakines.net>").
--version("Version: 0.2.2").
+-version("Version: 0.2.3").
 
 -export([server_info/1]).
 -export([create_database/2, database_info/2, delete_database/2]).
