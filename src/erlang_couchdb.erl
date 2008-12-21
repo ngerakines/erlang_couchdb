@@ -196,8 +196,7 @@ create_document({Server, ServerPort}, Database, DocumentID, Attributes) when is_
     update_document({Server, ServerPort}, Database, DocumentID, Attributes).
 
 %% @doc Create many documents in bulk.
-%% This function created and submitted by Pablo Sortino
-%% <psortino@novamens.com> and applied on 2008-10-25 by Nick Gerakines.
+%% This function created and submitted by Pablo Sortino, applied on 2008-10-25.
 create_documents({Server, ServerPort}, Database, Documents) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database, "_bulk_docs"),
     BulkCreate = {struct, [
