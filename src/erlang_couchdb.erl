@@ -186,7 +186,7 @@ server_info({Server, ServerPort}) when is_list(Server), is_integer(ServerPort) -
 %% The attributes should be a list of binary key/value tuples.
 create_document({Server, ServerPort}, Database, Attributes) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database),
-    JSON = list_to_binary(mochijson2:encode({struct, Attributes})),
+    JSON = list_to_binary(mochijson2:encode({Attributes})),
     raw_request("POST", Server, ServerPort, Url, JSON).
 
 %% @doc Create a new document with a specific document ID. This is just an
@@ -238,7 +238,7 @@ retrieve_document({Server, ServerPort}, Database, DocID, Attributes) when is_lis
 %% pair tuple.
 update_document({Server, ServerPort}, Database, DocID, Attributes) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database, DocID),
-    JSON = list_to_binary(mochijson2:encode({struct, Attributes})),
+    JSON = list_to_binary(mochijson2:encode({Attributes})),
     raw_request("PUT", Server, ServerPort, Url, JSON).
 
 %% @doc Deletes a given document by id and revision.
@@ -269,18 +269,18 @@ create_view({Server, ServerPort}, Database, ViewClass, Language, Views, Attribut
     Design = [
         {<<"_id">>, list_to_binary("_design/" ++ ViewClass)},
         {<<"language">>, Language},
-        {<<"views">>, {struct, [
+        {<<"views">>, {[
             begin
                 case View of
                     {Name, Map} -> 
-                        {Name, {struct, [{<<"map">>, Map}]}};
+                        {Name, {[{<<"map">>, Map}]}};
                     {Name, Map, Reduce} ->
-                        {Name, {struct, [{<<"map">>, Map}, {<<"reduce">>, Reduce}]}}
+                        {Name, {[{<<"map">>, Map}, {<<"reduce">>, Reduce}]}}
                 end
             end || View <- Views
         ]}}
     | Attributes],
-    JSON = list_to_binary(mochijson2:encode({struct, Design})),
+    JSON = list_to_binary(mochijson2:encode({Design})),
     Url = build_uri(Database, "_design/" ++ ViewClass),
     raw_request("PUT", Server, ServerPort, Url, JSON).
 
