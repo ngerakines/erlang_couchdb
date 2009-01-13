@@ -61,7 +61,7 @@
 -version("Version: 0.2.3").
 
 -export([server_info/1]).
--export([create_database/2, database_info/2, delete_database/2]).
+-export([create_database/2, database_info/2, retrieve_all_dbs/1, delete_database/2]).
 -export([create_document/3, create_document/4, create_documents/3]).
 -export([retrieve_document/3, retrieve_document/4, document_revision/3]).
 -export([update_document/4, delete_document/4, delete_documents/3]).
@@ -180,6 +180,13 @@ database_info({Server, ServerPort}, Database) when is_list(Server), is_integer(S
 server_info({Server, ServerPort}) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(),
     raw_request("GET", Server, ServerPort, Url, []).
+
+%% @edoc Retieve all the databases
+retrieve_all_dbs({Server, ServerPort}) when is_list(Server), is_integer(ServerPort) ->
+    raw_request("GET", Server, ServerPort, "/_all_dbs",[]). 
+
+			
+
 
 %% @doc Create a new document. This function will create a document with a
 %% list of attributes and leaves it up to the server to create an id for it.
