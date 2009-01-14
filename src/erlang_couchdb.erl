@@ -301,15 +301,17 @@ parse_view({json, {struct, [{<<"error">>, _Code}, {_, _Reason}]}}) ->
     {0, 0, []};
 parse_view({json, Structure}) ->
     {struct, Properties} = Structure,
-    {TotalRows, Offset, Data} = case Properties of
-        [{_, A}, {_, B}, {_, C}] -> {A, B, C};
-        [{_, A}, {_, B}] -> {A, B, []};
-        _ -> {0, 0, []}
-    end,
+    TotalRows = proplists:get_value(<<"total_rows">>, Properties, 0),
+    Offset = proplists:get_value(<<"offset">>, Properties, 0),
+    Data = proplists:get_value(<<"rows">>, Properties, []),
     Ids = [begin
         {struct, Bits} = Rec,
-        [{<<"id">>, Id} | _] = Bits,
-        Id
+        Id = proplists:get_value(<<"id">>, Bits),
+        case proplists:get_value(<<"value">>, Bits, []) of
+            [] -> Id;
+            {struct, RowValues} -> {Id, RowValues};
+            _ -> Id
+        end
     end || Rec <- Data],
     {TotalRows, Offset, Ids};
 parse_view(_Other) -> {0, 0, []}.
