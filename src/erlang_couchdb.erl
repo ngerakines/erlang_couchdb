@@ -193,7 +193,7 @@ retrieve_all_dbs({Server, ServerPort}) when is_list(Server), is_integer(ServerPo
 %% The attributes should be a list of binary key/value tuples.
 create_document({Server, ServerPort}, Database, Attributes) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database),
-    JSON = list_to_binary(mochijson2:encode({Attributes})),
+    JSON = list_to_binary(mochijson2:encode({struct, Attributes})),
     raw_request("POST", Server, ServerPort, Url, JSON).
 
 %% @doc Create a new document with a specific document ID. This is just an
@@ -222,7 +222,7 @@ document_revision({Server, ServerPort}, Database, DocID) when is_list(Server), i
     Url = build_uri(Database, DocID, []),
     JSON = raw_request("GET", Server, ServerPort, Url, []),
     case JSON of
-        {json,{struct, Props}} ->
+        {json, {struct, Props}} ->
             {ok, proplists:get_value(<<"_id">>, Props), proplists:get_value(<<"_rev">>, Props)};
         _ -> {error, JSON}
     end.
@@ -245,7 +245,7 @@ retrieve_document({Server, ServerPort}, Database, DocID, Attributes) when is_lis
 %% pair tuple.
 update_document({Server, ServerPort}, Database, DocID, Attributes) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database, DocID),
-    JSON = list_to_binary(mochijson2:encode({Attributes})),
+    JSON = list_to_binary(mochijson2:encode({struct, Attributes})),
     raw_request("PUT", Server, ServerPort, Url, JSON).
 
 %% @doc Deletes a given document by id and revision.
@@ -276,18 +276,18 @@ create_view({Server, ServerPort}, Database, ViewClass, Language, Views, Attribut
     Design = [
         {<<"_id">>, list_to_binary("_design/" ++ ViewClass)},
         {<<"language">>, Language},
-        {<<"views">>, {[
+        {<<"views">>, {struct, [
             begin
                 case View of
                     {Name, Map} -> 
-                        {Name, {[{<<"map">>, Map}]}};
+                        {Name, {struct, [{<<"map">>, Map}]}};
                     {Name, Map, Reduce} ->
-                        {Name, {[{<<"map">>, Map}, {<<"reduce">>, Reduce}]}}
+                        {Name, {struct, [{<<"map">>, Map}, {<<"reduce">>, Reduce}]}}
                 end
             end || View <- Views
         ]}}
     | Attributes],
-    JSON = list_to_binary(mochijson2:encode({Design})),
+    JSON = list_to_binary(mochijson2:encode({struct, Design})),
     Url = build_uri(Database, "_design/" ++ ViewClass),
     raw_request("PUT", Server, ServerPort, Url, JSON).
 
