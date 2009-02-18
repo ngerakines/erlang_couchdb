@@ -36,3 +36,9 @@ To create an object and set a number of attributes:
 
     erlang_couchdb:fold([erlang_couchdb:set_value(K, V) || {K,V} <- L],
     erlang_couchdb:empty())
+
+# TODO
+
+ * Document attachments 
+
+Your contributions are welcome.

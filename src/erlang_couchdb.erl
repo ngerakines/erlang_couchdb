@@ -168,26 +168,41 @@ decode_json(Body) ->
 %% @doc Create a new database.
 create_database({Server, ServerPort}, Database) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database),
-    raw_request("PUT", Server, ServerPort, Url, []).
+    case raw_request("PUT", Server, ServerPort, Url, []) of
+        {json, {struct, [{<<"ok">>, true}]}} -> ok;
+        Other -> {error, Other}
+    end.
 
 %% @doc Create a new database.
 delete_database({Server, ServerPort}, Database) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database),
-    raw_request("DELETE", Server, ServerPort, Url, []).
+    case raw_request("DELETE", Server, ServerPort, Url, []) of
+        {json, {struct, [{<<"ok">>, true}]}} -> ok;
+        Other -> {error, Other}
+    end.
 
 %% @doc Get info about a database.
 database_info({Server, ServerPort}, Database) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database),
-    raw_request("GET", Server, ServerPort, Url, []).
+    case raw_request("GET", Server, ServerPort, Url, []) of
+        {json, {struct, Props}} -> {ok, Props};
+        Other -> {error, Other}
+    end.
 
 %% @doc Get info about a server.
 server_info({Server, ServerPort}) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(),
-    raw_request("GET", Server, ServerPort, Url, []).
+    case raw_request("GET", Server, ServerPort, Url, []) of
+        {json, {struct, Welcome}} -> {ok, Welcome};
+        Other -> {other, Other}
+    end.
 
 %% @edoc Retieve all the databases
 retrieve_all_dbs({Server, ServerPort}) when is_list(Server), is_integer(ServerPort) ->
-    raw_request("GET", Server, ServerPort, "/_all_dbs",[]).
+    case raw_request("GET", Server, ServerPort, "/_all_dbs",[]) of
+        {json, Database} -> {ok, Database};
+        Other -> {error, Other}
+    end.
 
 %% @doc Create a new document. This function will create a document with a
 %% list of attributes and leaves it up to the server to create an id for it.
