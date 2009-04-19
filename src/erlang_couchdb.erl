@@ -165,6 +165,10 @@ decode_json(Body) ->
 %% ---
 %% Public Functions / API
 
+%% @spec create_database(DBServer::server_address(), Database::string()) ->  ok | {error, Reason::any()}
+%%
+%% @type server_address() = {Host::string(), ServerPort::integer()}
+%%
 %% @doc Create a new database.
 create_database({Server, ServerPort}, Database) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database),
@@ -173,7 +177,9 @@ create_database({Server, ServerPort}, Database) when is_list(Server), is_integer
         Other -> {error, Other}
     end.
 
-%% @doc Create a new database.
+%% @spec delete_database(DBServer::server_address(), Database::string()) ->  ok | {error, Reason::any()}
+%%
+%% @doc Delete a database.
 delete_database({Server, ServerPort}, Database) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database),
     case raw_request("DELETE", Server, ServerPort, Url, []) of
@@ -181,14 +187,18 @@ delete_database({Server, ServerPort}, Database) when is_list(Server), is_integer
         Other -> {error, Other}
     end.
 
+%% @spec database_info(DBServer::server_address(), Database::string()) ->  {ok, Info::any()} | {error, Reason::any()}
+%%
 %% @doc Get info about a database.
 database_info({Server, ServerPort}, Database) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database),
     case raw_request("GET", Server, ServerPort, Url, []) of
-        {json, {struct, Props}} -> {ok, Props};
+        {json, {struct, Info}} -> {ok, Info};
         Other -> {error, Other}
     end.
 
+%% @spec server_info(DBServer::server_address()) ->  {ok, Welcome::any()} | {other, Other::any()}
+%%
 %% @doc Get info about a server.
 server_info({Server, ServerPort}) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(),
@@ -197,13 +207,17 @@ server_info({Server, ServerPort}) when is_list(Server), is_integer(ServerPort) -
         Other -> {other, Other}
     end.
 
-%% @edoc Retieve all the databases
+%% @spec retrieve_all_dbs(DBServer::server_address()) ->  {ok, Database::any()} | {other, Other::any()}
+%%
+%% @doc Retieve all the databases
 retrieve_all_dbs({Server, ServerPort}) when is_list(Server), is_integer(ServerPort) ->
     case raw_request("GET", Server, ServerPort, "/_all_dbs",[]) of
         {json, Database} -> {ok, Database};
         Other -> {error, Other}
     end.
 
+%% @spec create_document(DBServer::server_address(), Database::string(), Attributes::any()) ->  {json, Response::any()} | {raw, Other::any()}
+%%
 %% @doc Create a new document. This function will create a document with a
 %% list of attributes and leaves it up to the server to create an id for it.
 %% The attributes should be a list of binary key/value tuples.
@@ -216,6 +230,8 @@ create_document({Server, ServerPort}, Database, Attributes) when is_list(Server)
     JSON = list_to_binary(mochijson2:encode({struct, Attributes})),
     raw_request("POST", Server, ServerPort, Url, JSON).
 
+%% @spec create_document(DBServer::server_address(), Database::string(), DocumentID::string(), Attributes::any()) ->  {json, Response::any()} | {raw, Other::any()}
+%%
 %% @doc Create a new document with a specific document ID. This is just an
 %% accessor function to update_document/4 when the intent is to create a 
 %% new document.
