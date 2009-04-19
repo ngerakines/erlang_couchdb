@@ -143,7 +143,7 @@ build_uri(Database, Request, Attributes) ->
 
 %% @private
 view_uri(Database, ViewName, ViewId, Args) ->
-    lists:concat(["/", Database, "/_view/", ViewName, "/", ViewId, build_querystring(Args)]).
+    lists:concat(["/", Database, "/_design/", ViewName, "/_view/", ViewId, build_querystring(Args)]).
 
 %% @private
 build_querystring([]) -> [];
