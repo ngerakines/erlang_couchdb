@@ -2,6 +2,7 @@ all: code
 
 code: clean
 	erlc +debug_info -o ./ebin src/erlang_couchdb.erl
+	erlc +debug_info -o ./ebin src/couchdb.erl
 
 clean:
 	rm -rfv ebin/*.beam erl_crash.dump

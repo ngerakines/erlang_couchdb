@@ -25,7 +25,7 @@
 %% @author Dmitrii 'Mamut' Dimandt <dmitrii@dmitriid.com>
 %% @copyright 2009 Dmitrii 'Mamut' Dimandt
 %% @version 0.1
-%% @doc A simple stupid wrapper for erlang_couchdb
+%% @doc A simple stupid wrapper for erlang_couchdb. Requires mochijson2
 %%
 %% This module was created for the purpose of further simplifying access
 %% to an already simple CouchDB interface.
@@ -34,16 +34,9 @@
 
 -module(couchdb).
 
--include("erlanger.hrl").
+-include("./../include/erlang_couchdb.hrl").
 
 -compile(export_all).
-
-%% replace these defines with your data
-
--define(DB_HOSTNAME, "localhost").
--define(DB_PORT, 5984).
--define(DB_HOST, {?DB_HOSTNAME, ?DB_PORT}).
--define(DB_DATABASE, "").
 
 
 create_database(Name) ->
@@ -83,17 +76,45 @@ retrieve_document(Db, ID) ->
 retrieve_document(Server, Db, ID) ->
 	erlang_couchdb:retrieve_document(Server, Db, ID).
 
+%% @spec update_document(ID::string(), Doc::proplist()) ->  ok | {error, Reason::any()}
+%%
+%% @doc Update only several fields in a document. Leave all other fields unmodified
 update_document(ID, Doc) ->
 	{json, Document} = retrieve_document(ID),
 	Rev = get_rev(Document),
-	erlang_couchdb:update_document(?DB_HOST, ?DB_DATABASE, ID, [{<<"_rev">>, list_to_binary(Rev)} | Doc]).
+	Doc2 = update_doc_fields(Document, Doc),
+	replace_document(ID, Rev, Doc2).
 update_document(ID, Rev, Doc) ->
-	erlang_couchdb:update_document(?DB_HOST, ?DB_DATABASE, ID, [{<<"_rev">>, list_to_binary(Rev)} | Doc]).
+	{json, Document} = retrieve_document(ID),
+	Doc2 = update_doc_fields(Document, Doc),
+	replace_document(ID, Rev, Doc2).
 update_document(Db, ID, Rev, Doc) ->
-	erlang_couchdb:update_document(?DB_HOST, Db, ID, [{<<"_rev">>, list_to_binary(Rev)} | Doc]).
+	{json, Document} = retrieve_document(ID),
+	Doc2 = update_doc_fields(Document, Doc),
+	replace_document(?DB_HOST, Db, ID, Rev, Doc2).
 update_document(Server, Db, ID, Rev, Doc) ->
+	{json, Document} = retrieve_document(ID),
+	Doc2 = update_doc_fields(Document, Doc),
+	replace_document(Server, Db, ID, Rev, Doc2).
+
+%% @spec replace_document(ID::string(), Doc::proplist()) ->  ok | {error, Reason::any()}
+%%
+%% @doc Replace the doc by a new doc (default erlang_couchdb and couchdb behaviour for updates)
+replace_document(ID, Doc) ->
+	{json, Document} = retrieve_document(ID),
+	Rev = get_rev(Document),
+	replace_document(ID, Rev, Doc).
+	%erlang_couchdb:update_document(, [{<<"_rev">>, list_to_binary(Rev)} | Doc]).
+replace_document(ID, Rev, Doc) ->
+	erlang_couchdb:update_document(?DB_HOST, ?DB_DATABASE, ID, [{<<"_rev">>, list_to_binary(Rev)} | Doc]).
+replace_document(Db, ID, Rev, Doc) ->
+	erlang_couchdb:update_document(?DB_HOST, Db, ID, [{<<"_rev">>, list_to_binary(Rev)} | Doc]).
+replace_document(Server, Db, ID, Rev, Doc) ->
 	erlang_couchdb:update_document(Server, Db, ID, [{<<"_rev">>, list_to_binary(Rev)} | Doc]).
 
+%% @spec replace_document(ID::string()) ->  ok | {error, Reason::any()}
+%%
+%% @doc Delete a document
 delete_document(ID) ->
 	{json, Document} = retrieve_document(ID),
 	Rev = get_rev(Document),
@@ -119,6 +140,9 @@ create_view(Server, Db, DocName, Type, ViewName, Data) ->
 
 invoke_view(DocName, ViewName) ->
 	erlang_couchdb:invoke_view(?DB_HOST, ?DB_DATABASE, DocName, ViewName, []).
+%% @spec invoke_view(DocName::string(), ViewName::string(), Keys::proplist()) ->  result | {error, Reason::any()}
+%%
+%% @doc Invoke a CouchDB view
 invoke_view(DocName, ViewName, Keys) ->
 	erlang_couchdb:invoke_view(?DB_HOST, ?DB_DATABASE, DocName, ViewName, Keys).
 invoke_view(Db, DocName, ViewName, Keys) ->
@@ -127,6 +151,11 @@ invoke_view(Server, Db, DocName, ViewName, Keys) ->
 	erlang_couchdb:invoke_view(Server, Db, DocName, ViewName, Keys).
 
 
+%% @spec get_value(DocName::document(), Key::binary()) ->  empty_string | {error, Reason::any()}
+%%
+%% @type document() = json_struct()
+%%
+%% @doc Invoke a CouchDB view
 get_value(Doc, Key) ->
 	get_value(Doc, Key, "").
 get_value({struct, L}, Key, DefaultValue) ->
@@ -139,7 +168,7 @@ get_value({struct, L}, Key, DefaultValue) ->
 	end;
 get_value({json, {struct, ValueList}}, Key, DefaultValue) ->
 	proplists:get_value(Key, ValueList, DefaultValue);
-get_value(_, Key, DefaultValue) ->
+get_value(_, _Key, DefaultValue) ->
 	DefaultValue.
 	
 get_id(Doc) ->
@@ -154,9 +183,7 @@ get_id(_, DefaultValue) ->
 get_rev(Doc) ->
 	get_rev(Doc, "").
 get_rev(Doc, DefaultValue) ->
-	binary_to_list(get_value(Doc, <<"_rev">>, DefaultValue));
-get_rev(_, DefaultValue) ->
-	DefaultValue.
+	binary_to_list(get_value(Doc, <<"_rev">>, DefaultValue)).
 	
 get_revs(ID) ->
 	get_revs(?DB_HOST, ?DB_DATABASE, ID).
@@ -165,10 +192,9 @@ get_revs(Db, ID) ->
 get_revs(Server, Db, ID) ->
 	{ServerName, Port} = Server,
 	Type = "GET",
-	URI = lists:concat(["/", ?DB_DATABASE, "/", ID, "?", "revs_info=true"]),
+	URI = lists:concat(["/", Db, "/", ID, "?", "revs_info=true"]),
 	Body = <<>>,
 	Rows = erlang_couchdb:raw_request(Type, ServerName, Port, URI, Body),
-	%%Rows.a(Rows) -> Rows,
 	case Rows of
 		{json, {struct, PropList}} ->
 			Revs = proplists:get_value(<<"_revs_info">>, PropList, []),
@@ -210,3 +236,24 @@ get_rows({json, {struct, L}}) ->
     proplists:get_value(<<"rows">>, L, []);
 get_rows(_Any) ->
     [].
+
+
+%% @private
+%% Update document fields wih new values.
+%%
+%% @see update_document
+
+
+update_doc_fields({struct, Doc}, NewFields) ->
+	update_doc_fields(Doc, NewFields);
+
+update_doc_fields(OldDoc, []) ->
+	OldDoc;
+update_doc_fields(OldDoc, [{Key, Value}|T]) ->
+	case proplists:get_value(Key, OldDoc) of
+		undefined ->
+			update_doc_fields([{Key, Value}] ++ OldDoc, T);
+		_ ->
+			NewDoc = proplists:delete(Key, OldDoc),
+			update_doc_fields([{Key, Value}] ++ NewDoc, T)
+	end.
