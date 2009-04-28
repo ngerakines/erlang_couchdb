@@ -65,11 +65,11 @@
 
 -export([server_info/1]).
 -export([create_database/2, database_info/2, retrieve_all_dbs/1, delete_database/2]).
--export([create_document/3, create_document/4, create_documents/3]).
+-export([create_document/3, create_document/4, create_documents/3, create_attachment/5]).
 -export([retrieve_document/3, retrieve_document/4, document_revision/3]).
 -export([update_document/4, delete_document/4, delete_documents/3]).
 -export([create_view/5, create_view/6, invoke_view/5, load_view/4]).
--export([raw_request/5, fetch_ids/2, parse_view/1]).
+-export([raw_request/5, raw_request/6, fetch_ids/2, parse_view/1]).
 -export([get_value/2, set_value/2, set_value/3, fold/2, empty/0]).
 
 %% @private
@@ -84,6 +84,18 @@ raw_request(Type, Server, Port, URI, Body) ->
     gen_tcp:close(Socket),
     {ok,_, ResponseBody} = erlang:decode_packet(http, Resp, []),
     decode_json(parse_response(ResponseBody)).
+
+%% @private
+%% Added suport to change the ContentType
+raw_request(Type, Server, Port, URI, ContentType, Body) ->
+    {ok, Socket} = gen_tcp:connect(Server, Port, [binary, {active, false}, {packet, 0}]),
+    Req = build_request(Type, URI, ContentType, Body),
+    gen_tcp:send(Socket, Req),
+    {ok, Resp} = do_recv(Socket, []),
+    gen_tcp:close(Socket),
+    {ok,_, ResponseBody} = erlang:decode_packet(http, Resp, []),
+    decode_json(parse_response(ResponseBody)).
+
 
 do_recv(Sock, Bs) ->
     case gen_tcp:recv(Sock, 0) of
@@ -114,6 +126,17 @@ build_request(Type, URI, Body) ->
         lists:concat([Type, " ", URI, " HTTP/1.0\r\n"
             "Content-Length: ", erlang:iolist_size(Body), "\r\n"
             "Content-Type: application/json\r\n\r\n"
+        ]),
+        Body
+    ]).
+
+%% @private
+%% Added suport to change the ContentType
+build_request(Type, URI, ContentType, Body) ->
+    erlang:iolist_to_binary([
+        lists:concat([Type, " ", URI, " HTTP/1.0\r\n"
+            "Content-Length: ", erlang:iolist_size(Body), "\r\n"
+            "Content-Type: ", ContentType, "\r\n\r\n"
         ]),
         Body
     ]).
@@ -215,6 +238,14 @@ retrieve_all_dbs({Server, ServerPort}) when is_list(Server), is_integer(ServerPo
         {json, Database} -> {ok, Database};
         Other -> {error, Other}
     end.
+
+%% @spec create_attachment(DBServer::server_address(), Database::string(), ContentType::string(), File::string()) -> {"ok": true, "id": "document", "rev": Rev::string()}
+%%
+%% @doc Create a new attachment document.
+create_attachment({Server, ServerPort}, Database, DocumentID, File, ContentType) ->
+    {ok, Body} = file:read_file(File),
+    Url = build_uri(Database, DocumentID ++ "/attachment"),
+    erlang_couchdb:raw_request("PUT", Server, ServerPort, Url, ContentType, Body).
 
 %% @spec create_document(DBServer::server_address(), Database::string(), Attributes::any()) ->  {json, Response::any()} | {raw, Other::any()}
 %%
