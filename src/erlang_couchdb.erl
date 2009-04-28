@@ -239,7 +239,7 @@ retrieve_all_dbs({Server, ServerPort}) when is_list(Server), is_integer(ServerPo
         Other -> {error, Other}
     end.
 
-%% @spec create_attachment(DBServer::server_address(), Database::string(), ContentType::string(), File::string()) -> {"ok": true, "id": "document", "rev": Rev::string()}
+%% @spec create_attachment(DBServer::server_address(), Database::string(), DocumentID::string(), File::string(), ContentType::string()) -> {"ok": true, "id": "document", "rev": Rev::string()}
 %%
 %% @doc Create a new attachment document.
 create_attachment({Server, ServerPort}, Database, DocumentID, File, ContentType) ->
