@@ -96,7 +96,7 @@ raw_request(Type, Server, Port, URI, ContentType, Body) ->
     {ok,_, ResponseBody} = erlang:decode_packet(http, Resp, []),
     decode_json(parse_response(ResponseBody)).
 
-
+%% @private
 do_recv(Sock, Bs) ->
     case gen_tcp:recv(Sock, 0) of
         {ok, B} ->
@@ -185,9 +185,6 @@ decode_json(Body) ->
         _:_ -> {raw, Body}
     end.
 
-%% ---
-%% Public Functions / API
-
 %% @spec create_database(DBServer::server_address(), Database::string()) ->  ok | {error, Reason::any()}
 %%
 %% @type server_address() = {Host::string(), ServerPort::integer()}
@@ -252,13 +249,11 @@ create_attachment({Server, ServerPort}, Database, DocumentID, File, ContentType)
 %% @doc Create a new document. This function will create a document with a
 %% list of attributes and leaves it up to the server to create an id for it.
 %% The attributes should be a list of binary key/value tuples.
+create_document({Server, ServerPort}, Database, Attributes) when is_list(Server), is_integer(ServerPort), is_list(Attributes) ->
+    create_document({Server, ServerPort}, Database, {struct, Attributes});
 create_document({Server, ServerPort}, Database, {struct, _} = Obj) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database),
     JSON = list_to_binary(mochijson2:encode(Obj)),
-    raw_request("POST", Server, ServerPort, Url, JSON);
-create_document({Server, ServerPort}, Database, Attributes) when is_list(Server), is_integer(ServerPort) ->
-    Url = build_uri(Database),
-    JSON = list_to_binary(mochijson2:encode({struct, Attributes})),
     raw_request("POST", Server, ServerPort, Url, JSON).
 
 %% @spec create_document(DBServer::server_address(), Database::string(), DocumentID::string(), Attributes::any()) ->  {json, Response::any()} | {raw, Other::any()}
@@ -271,6 +266,7 @@ create_document({Server, ServerPort}, Database, DocumentID, Attributes) when is_
 
 %% @doc Create many documents in bulk.
 %% This function created and submitted by Pablo Sortino, applied on 2008-10-25.
+%% @todo Create a spec for this.
 create_documents({Server, ServerPort}, Database, Documents) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database, "_bulk_docs"),
     BulkCreate = {struct, [
@@ -283,24 +279,25 @@ create_documents({Server, ServerPort}, Database, Documents) when is_list(Server)
 
 %% @doc Return a tuple containing a document id and the document's latest
 %% revision.
+%% @todo Create a spec for this.
 document_revision({Server, ServerPort}, Database, DocID) when is_binary(DocID) ->
     document_revision({Server, ServerPort}, Database, binary_to_list(DocID));
 document_revision({Server, ServerPort}, Database, DocID) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database, DocID, []),
-    JSON = raw_request("GET", Server, ServerPort, Url, []),
-    case JSON of
+    case raw_request("GET", Server, ServerPort, Url, []) of
         {json, {struct, Props}} ->
-            {ok, proplists:get_value(<<"_id">>, Props), proplists:get_value(<<"_rev">>, Props)};
-        _ -> {error, JSON}
+            {ok, proplists:get_value(<<"_id">>, Props, undefined), proplists:get_value(<<"_rev">>, Props, undefined)};
+        Other -> {error, Other}
     end.
 
-
 %% @doc Fetches a document by it's id.
+%% @todo Create a spec for this.
 retrieve_document({Server, ServerPort}, Database, DocID) ->
     retrieve_document({Server, ServerPort}, Database, DocID, []).
 
 %% @doc Fetches a document by it's id and also some attributes. Attributes
 %% should be a list of non binary key/value pair tuples.
+%% @todo Create a spec for this.
 retrieve_document({Server, ServerPort}, Database, DocID, Attributes) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database, DocID, Attributes),
     raw_request("GET", Server, ServerPort, Url, []).
@@ -310,6 +307,7 @@ retrieve_document({Server, ServerPort}, Database, DocID, Attributes) when is_lis
 %% or create a new one with a specified id. If this function is used to
 %% update a document the attributes list must contain a '_rev' key/value
 %% pair tuple.
+%% @todo Create a spec for this.
 update_document({Server, ServerPort}, Database, DocID, {struct,_} = Obj) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database, DocID),
     JSON = list_to_binary(mochijson2:encode(Obj)),
@@ -320,6 +318,7 @@ update_document({Server, ServerPort}, Database, DocID, Attributes) when is_list(
     raw_request("PUT", Server, ServerPort, Url, JSON).
 
 %% @doc Deletes a given document by id and revision.
+%% @todo Create a spec for this.
 delete_document({Server, ServerPort}, Database, DocID, Revision) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database, DocID, [{"rev", Revision}]),
     raw_request("DELETE", Server, ServerPort, Url, []).
@@ -336,6 +335,7 @@ delete_documents({Server, ServerPort}, Database, Documents) when is_list(Server)
     raw_request("POST", Server, ServerPort, Url, JSON).
 
 %% @doc Creates a design document. See create_view/6 for more.
+%% @todo Create a spec for this.
 create_view({Server, ServerPort}, Database, ViewClass, Language, Views) ->
     create_view({Server, ServerPort}, Database, ViewClass, Language, Views, []).
 
@@ -343,6 +343,7 @@ create_view({Server, ServerPort}, Database, ViewClass, Language, Views) ->
 %% a list of tuples representing the view's data. When updating an existing
 %% view please be sure to include the _rev field in the Attributes
 %% parameter.
+%% @todo Create a spec for this.
 create_view({Server, ServerPort}, Database, ViewClass, Language, Views, Attributes)  when is_list(Server), is_integer(ServerPort) ->
     Design = [
         {<<"_id">>, list_to_binary("_design/" ++ ViewClass)},
@@ -363,16 +364,20 @@ create_view({Server, ServerPort}, Database, ViewClass, Language, Views, Attribut
     raw_request("PUT", Server, ServerPort, Url, JSON).
 
 %% @doc Executes a view with or without some attributes as modifiers.
+%% @todo Create a spec for this.
 invoke_view({Server, ServerPort}, Database, ViewClass, ViewId, Attributes) when is_list(Server), is_integer(ServerPort) ->
     Url = view_uri(Database, ViewClass, ViewId, Attributes),
     raw_request("GET", Server, ServerPort, Url, []).
 
+%% @todo Document this.
+%% @todo Create a spec for this.
 invoke_multikey_view({Server, ServerPort}, Database, ViewClass, ViewId, Keys, Attributes) when is_list(Server), is_integer(ServerPort) ->
     Url = view_uri(Database, ViewClass, ViewId, Attributes),
     JSON = list_to_binary(mochijson2:encode({struct, [{keys, Keys}]})),
     raw_request("POST", Server, ServerPort, Url, JSON).
 
 %% @doc Return a list of document ids for a given view.
+%% @todo Create a spec for this.
 parse_view({json, {struct, [{<<"error">>, _Code}, {_, _Reason}]}}) ->
     {0, 0, []};
 parse_view({json, Structure}) ->
@@ -393,9 +398,9 @@ parse_view({json, Structure}) ->
 parse_view(_Other) -> {0, 0, []}.
 
 %% @doc Fetch a number of UUIDs from a CouchDB server.
+%% @todo Create a spec for this.
 fetch_ids({Server, ServerPort}, Limit) ->
     Url = build_uri(lists:concat(["_uuids?count=", Limit])),
-    io:format("Url ~p~n", [Url]),
     raw_request("POST", Server, ServerPort, Url, []).
 
 %% @doc Create a design document based on a file's contents.
@@ -410,12 +415,15 @@ load_view({Server, ServerPort}, Database, ViewName, File) ->
     ).
 
 %% @doc Get the specified (set of) attribute(s)
+%% @todo Create a spec for this.
+%% @private
 get_value(Path, Struct) when is_list(Path) ->
     get_val(Path, Struct);
 get_value(Key, Struct) when is_binary(Key) ->
     {struct, L} = Struct,
     proplists:get_value(Key, L).
 
+%% @private
 get_val([Key], Struct) ->
     get_value(Key, Struct);
 get_val([Key | T], Struct) ->
@@ -424,6 +432,7 @@ get_val([Key | T], Struct) ->
         NewStruct when is_tuple(NewStruct) -> get_val(T, NewStruct)
     end.
 
+%% @private
 %% @doc Set the specified (set of) attribute(s)
 set_value(Path, Value, Struct) when is_list(Path) ->
     [H | T] = lists:reverse(Path),
@@ -431,27 +440,33 @@ set_value(Path, Value, Struct) when is_list(Path) ->
 set_value(Key, Value, Struct) when is_binary(Key) ->
     extend(Struct, {struct, [{Key, Value}]}).
 
+%% @private
 set_val([], Struct, Result) ->
     extend(Struct, Result);
 set_val([Key | T], Struct, Result) ->
     set_val(T, Struct, {struct, [{Key, Result}]}).
 
+%% @private
 %% @doc To be used with the fold function
 set_value(Key, Value) when is_binary(Key) ->
     fun(Struct) -> set_value(Key, vals(Value), Struct) end.
 
+%% @private
 vals(B) when is_binary(B) -> B;
 vals(I) when is_integer(I) -> I;
 vals(L) when is_list(L) -> list_to_binary(L);
 vals(A) when is_atom(A) -> vals(atom_to_list(A)).
 
+%% @private
 %% @doc Apply a list of set-functions on an initial object.
 fold([H|T], Struct) -> fold(T, H(Struct));
 fold([], Struct) -> Struct.
 
+%% @private
 %% @doc Return an empty object
 empty() -> {struct, []}.
 
+%% @private
 %% @doc Extend a json obj with one or more json obj (add new leaves and modify the existing ones).
 extend(S1, []) -> S1;
 extend(S1, [S|T]) ->
@@ -462,6 +477,7 @@ extend(S1, S2) ->
     {struct, L2} = S2,
     ext(L1, L2, []).
 
+%% @private
 ext(L1, [], Result) ->
     {struct, lists:append(Result,L1)};
 ext(L1, [{K, {struct, ChildL2}} | T], Result) ->

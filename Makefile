@@ -7,11 +7,7 @@ test: all
 
 clean:
 	(cd src;$(MAKE) clean)
-	(cd t; $(MAKE) clean)
-	rm -rf erl_crash.dump *.beam *.hrl
-
-clean:
-	rm -rfv ebin/*.beam erl_crash.dump
+	rm -rf erl_crash.dump *.beam *.hrl cover
 
 dist-src: clean
 	tar zcvf erlang_couchdb-0.2.3.tgz Makefile src/
