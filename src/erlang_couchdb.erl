@@ -68,7 +68,7 @@
 -export([create_document/3, create_document/4, create_documents/3, create_attachment/5]).
 -export([retrieve_document/3, retrieve_document/4, document_revision/3]).
 -export([update_document/4, delete_document/4, delete_documents/3]).
--export([create_view/5, create_view/6, invoke_view/5, load_view/4]).
+-export([create_view/5, create_view/6, invoke_view/5, invoke_multikey_view/6, load_view/4]).
 -export([raw_request/5, raw_request/6, fetch_ids/2, parse_view/1]).
 -export([get_value/2, set_value/2, set_value/3, fold/2, empty/0]).
 
@@ -366,6 +366,11 @@ create_view({Server, ServerPort}, Database, ViewClass, Language, Views, Attribut
 invoke_view({Server, ServerPort}, Database, ViewClass, ViewId, Attributes) when is_list(Server), is_integer(ServerPort) ->
     Url = view_uri(Database, ViewClass, ViewId, Attributes),
     raw_request("GET", Server, ServerPort, Url, []).
+
+invoke_multikey_view({Server, ServerPort}, Database, ViewClass, ViewId, Keys, Attributes) when is_list(Server), is_integer(ServerPort) ->
+    Url = view_uri(Database, ViewClass, ViewId, Attributes),
+    JSON = list_to_binary(mochijson2:encode({struct, [{keys, Keys}]})),
+    raw_request("POST", Server, ServerPort, Url, JSON).
 
 %% @doc Return a list of document ids for a given view.
 parse_view({json, {struct, [{<<"error">>, _Code}, {_, _Reason}]}}) ->
