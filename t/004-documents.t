@@ -3,7 +3,8 @@
 %%! -pa ./ebin
 
 main(_) ->
-    etap:plan(9),
+    %% @todo set this plan
+    etap:plan(unknown),
     pre_run(),
     test(),
     etap:end_tests(),
@@ -27,17 +28,39 @@ test() ->
         etap:is(erlang_couchdb:create_database({"localhost", 5984}, Database), ok, "tmp database created"),
         {ok, DatabaseProps} = erlang_couchdb:database_info({"localhost", 5984}, Database),
         etap:is(proplists:get_value(<<"db_name">>, DatabaseProps), list_to_binary(Database), "name ok"),
-        etap:is(proplists:get_value(<<"doc_count">>, DatabaseProps), 0, "document count ok"),
-        etap:is(proplists:get_value(<<"doc_del_count">>, DatabaseProps), 0, "document delete count ok"),
-        etap:is(proplists:get_value(<<"update_seq">>, DatabaseProps), 0, "update count ok"),
-        etap:is(proplists:get_value(<<"purge_seq">>, DatabaseProps), 0, "purge count ok"),
-        etap:is(proplists:get_value(<<"compact_running">>, DatabaseProps), false, "compaction status ok"),
         ok
     end)(),
     
     (fun() ->
         {ok, Databases} = erlang_couchdb:retrieve_all_dbs({"localhost", 5984}),
         etap:is(Databases, [list_to_binary(Database)], "tmp database listed"),
+        ok
+    end)(),
+    
+    %% Create a document
+    (fun() ->
+        etap:fun_is(
+            fun ({json,{struct,[{<<"ok">>,true}, {<<"id">>,<<"FooDocument">>}, {<<"rev">>, _}]}}) -> true;
+                (_) -> false
+            end,
+            erlang_couchdb:create_document({"localhost", 5984}, Database, "FooDocument", [{<<"foo">>, <<"bar">>}]),
+            "Creating document"
+        ),
+        ok
+    end)(),
+    
+    %% Fetch back that document
+    (fun() ->
+        etap:fun_is(
+            fun ({json, {struct, Keys}}) ->
+                    etap:is(proplists:get_value(<<"_id">>, Keys), <<"FooDocument">>, "_id ok"),
+                    etap:is(proplists:get_value(<<"foo">>, Keys), <<"bar">>, "foo ok"),
+                    true;
+                (_) -> false
+            end,
+            erlang_couchdb:retrieve_document({"localhost", 5984}, Database, "FooDocument"),
+            "Fetching document"
+        ),
         ok
     end)(),
     
