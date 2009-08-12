@@ -17,7 +17,7 @@ A quick demo:
     erlang_couchdb:create_database({"localhost", 5984}, "iplaywow").
     erlang_couchdb:database_info({"localhost", 5984}, "iplaywow").
     erlang_couchdb:server_info({"localhost", 5984}).
-    erlang_couchdb:create_document({"localhost", 5984}, "iplaywow", [{<<"name">>, <<"Korale">>}, {<<"type">>}, <<"character">>}]).
+    erlang_couchdb:create_document({"localhost", 5984}, "iplaywow", [{<<"name">>, <<"Korale">>}, {<<"type">>, <<"character">>}]).
     erlang_couchdb:retrieve_document({"localhost", 5984}, "iplaywow", "0980...").
     erlang_couchdb:update_document({"localhost", 5984}, "iplaywow", "0980...", [{<<"_rev">>, <<"3419...">>}, {<<"name">>, <<"Korale">>}, {<<"level">>, <<"70">>}, {<<"type">>}, <<"character">>}]).
     erlang_couchdb:delete_document({"localhost", 5984}, "iplaywow", "1fd0...", "1193...").
