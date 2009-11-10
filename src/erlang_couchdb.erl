@@ -344,6 +344,9 @@ create_view({Server, ServerPort}, Database, ViewClass, Language, Views) ->
 %% view please be sure to include the _rev field in the Attributes
 %% parameter.
 %% @todo Create a spec for this.
+create_view({Server, ServerPort}, Database, ViewClass, Language, Views, Attributes)  when is_list(Server), is_integer(ServerPort), is_list(Language) ->
+	create_view({Server, ServerPort}, Database, ViewClass, list_to_binary(Language), Views, Attributes) 
+	;
 create_view({Server, ServerPort}, Database, ViewClass, Language, Views, Attributes)  when is_list(Server), is_integer(ServerPort) ->
     Design = [
         {<<"_id">>, list_to_binary("_design/" ++ ViewClass)},
@@ -352,9 +355,9 @@ create_view({Server, ServerPort}, Database, ViewClass, Language, Views, Attribut
             begin
                 case View of
                     {Name, Map} -> 
-                        {Name, {struct, [{<<"map">>, Map}]}};
+                        {Name, {struct, [{<<"map">>, list_to_binary(Map)}]}};
                     {Name, Map, Reduce} ->
-                        {Name, {struct, [{<<"map">>, Map}, {<<"reduce">>, Reduce}]}}
+                        {Name, {struct, [{<<"map">>, list_to_binary(Map)}, {<<"reduce">>, list_to_binary(Reduce)}]}}
                 end
             end || View <- Views
         ]}}
