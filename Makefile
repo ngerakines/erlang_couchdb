@@ -2,6 +2,13 @@ all:
 	mkdir -p ebin/
 	(cd src;$(MAKE))
 
+compile:    ${MODS:%=%.beam}
+
+ct:	compile
+	cp ./ebin/*.beam ./test
+	mkdir -p ../../Erlang/erlandom/pshb/webhook/htdocs/erlang_couchdbtest
+	/usr/local/lib/erlang/lib//common_test-1.4.5/priv/bin/run_test -dir . -logdir ../../Erlang/erlandom/pshb/webhook/htdocs/erlang_couchdbtest -cover ./config/couchdb.coverspec
+
 test: all
 	prove t/*.t
 
