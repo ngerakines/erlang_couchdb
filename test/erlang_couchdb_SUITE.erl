@@ -118,14 +118,47 @@ viewaccess_nullmap() ->
 	[{userdata,[{doc,"Documents creation, set null selection view, accessview and deletion"}]}]	.
 
 viewaccess_nullmap(_Config) ->
-	do_viewaccess_maponly("function(doc) { emit(null, doc)}")
+	%   setup
+	ok = erlang_couchdb:create_database(?CONNECTION, ?DBNAME),
+
+	do_viewaccess_maponly("function(doc) { emit(null, doc)}"),
+
+	% assertion
+
+	%   tear down
+	ok = erlang_couchdb:delete_database(?CONNECTION, ?DBNAME)
 	.
 
 viewaccess_maponly() ->
 	[{userdata,[{doc,"Documents creation, set view, accessview and deletion"}]}]	.
 
 viewaccess_maponly(_Config) ->
-	do_viewaccess_maponly("function(doc) { if(doc.type) {emit(null, doc.type)}}")
+	%   setup
+	ok = erlang_couchdb:create_database(?CONNECTION, ?DBNAME),
+
+	ResView = do_viewaccess_maponly("function(doc) { if(doc.type) {emit(null, doc.type)}}"),
+	ct:print("view access result: ~p~n",[ResView]),
+
+	% assertion
+	{json,
+          {struct,
+                  [{<<"total_rows">>,2},
+                  {<<"offset">>,0},
+                  {<<"rows">>,
+                       [{struct,
+                       [{<<"id">>,
+                                     _ID1},
+                                    {<<"key">>,null},
+                                    {<<"value">>,<<"D">>}]},
+                               {struct,
+                                   [{<<"id">>,
+									 _ID2},
+                                    {<<"key">>,null},
+                                    {<<"value">>,<<"S">>}]}]}]}}
+		= ResView,
+
+	%   tear down
+	ok = erlang_couchdb:delete_database(?CONNECTION, ?DBNAME)
 	.
 
 do_viewaccess_maponly(Viewsource) ->
@@ -133,8 +166,6 @@ do_viewaccess_maponly(Viewsource) ->
 	.
 
 do_viewaccess_maponly(Viewsource, Cb) ->
-	%   setup
-	ok = erlang_couchdb:create_database(?CONNECTION, ?DBNAME),
 	{json,{struct,[_, {<<"id">>, Id},_]}} = erlang_couchdb:create_document(?CONNECTION, ?DBNAME, {struct, [{<<"type">>, <<"D">> } ]}),
 	{json,{struct,[_, {<<"id">>, Id2},_]}} = erlang_couchdb:create_document(?CONNECTION, ?DBNAME, {struct, [{<<"type">>, <<"S">> } ]}),
 	Doc = erlang_couchdb:retrieve_document(?CONNECTION, ?DBNAME, binary_to_list((Id))),
@@ -146,11 +177,7 @@ do_viewaccess_maponly(Viewsource, Cb) ->
 	ct:print("view creation result: ~p~n",[Res]),
 
 	% view access
-	ResView = Cb(erlang_couchdb:invoke_view(?CONNECTION, ?DBNAME, "testview", "all",[])),
-	ct:print("view access result: ~p~n",[ResView]),
-
-	%   tear down
-	ok = erlang_couchdb:delete_database(?CONNECTION, ?DBNAME)
+	Cb(erlang_couchdb:invoke_view(?CONNECTION, ?DBNAME, "testview", "all",[]))
 	.
 
 parseview() ->
@@ -158,6 +185,16 @@ parseview() ->
 	.
 
 parseview(_Config) ->
+	%   setup
+	ok = erlang_couchdb:create_database(?CONNECTION, ?DBNAME),
+
 	ct:print("parse_view~n",[]),
-	do_viewaccess_maponly("function(doc) { if(doc.type) {emit(null, doc.type)}}", fun(X) -> erlang_couchdb:parse_view(X) end)
+	ResView = do_viewaccess_maponly("function(doc) { if(doc.type) {emit(null, doc.type)}}", fun(X) -> erlang_couchdb:parse_view(X) end),
+	ct:print("view access result: ~p~n",[ResView]),
+
+	% assertion
+	{2,0,_Array} = ResView,
+
+	%   tear down
+	ok = erlang_couchdb:delete_database(?CONNECTION, ?DBNAME)
 	.
