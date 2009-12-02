@@ -21,9 +21,10 @@ suite() -> [{timetrap,{minutes,1}}]
 all() ->
 	[serverinfo, all_databases, 
 	 databaselifecycle, documentlifecycle,
-	 createview, viewaccess_nullmap, viewaccess_maponly,
+	 createview,
+	 viewaccess_nullmap, viewaccess_maponly, viewaccess_mapreduce,
 	 parseview
-	]     %, viewaccess_mapreduce]
+	]     
 	.
 
 init_per_suite(Config) ->
@@ -149,12 +150,14 @@ viewaccess_maponly(_Config) ->
                        [{<<"id">>,
                                      _ID1},
                                     {<<"key">>,null},
-                                    {<<"value">>,<<"D">>}]},
+                                    % {<<"value">>,<<"D">>}]},
+                                    {<<"value">>,_B1}]},
                                {struct,
                                    [{<<"id">>,
 									 _ID2},
                                     {<<"key">>,null},
-                                    {<<"value">>,<<"S">>}]}]}]}}
+                                    % {<<"value">>,<<"S">>}]}]}]}}
+                                    {<<"value">>, _B2}]}]}]}}
 		= ResView,
 
 	%   tear down
@@ -190,10 +193,55 @@ parseview(_Config) ->
 
 	ct:print("parse_view~n",[]),
 	ResView = do_viewaccess_maponly("function(doc) { if(doc.type) {emit(null, doc.type)}}", fun(X) -> erlang_couchdb:parse_view(X) end),
-	ct:print("view access result: ~p~n",[ResView]),
+	ct:print("parse view access result: ~p~n",[ResView]),
 
 	% assertion
 	{2,0,_Array} = ResView,
+
+	%   tear down
+	ok = erlang_couchdb:delete_database(?CONNECTION, ?DBNAME)
+	.
+
+do_viewaccess_mapreduce(Mapsource, Reducesource) ->
+	do_viewaccess_mapreduce(Mapsource, Reducesource, fun(X) -> X end)
+	.
+	
+do_viewaccess_mapreduce(Mapsource, Reducesource, Cb) ->
+	{json,{struct,[_, {<<"id">>, Id},_]}} = erlang_couchdb:create_document(?CONNECTION, ?DBNAME, {struct, [{<<"type">>, <<"D">> },{<<"val">>, 1} ]}),
+	{json,{struct,[_, {<<"id">>, Id2},_]}} = erlang_couchdb:create_document(?CONNECTION, ?DBNAME, {struct, [{<<"type">>, <<"S">> }, {<<"val">>, 2}]}),
+	Doc = erlang_couchdb:retrieve_document(?CONNECTION, ?DBNAME, binary_to_list((Id))),
+	ct:print(test_category, "Document A: ~p", [Doc]),
+	Doc2 = erlang_couchdb:retrieve_document(?CONNECTION, ?DBNAME, binary_to_list(Id2)),
+	ct:print(test_category, "Document B: ~p", [Doc2]),
+	Views = [{"all", Mapsource, Reducesource}],
+	Res = erlang_couchdb:create_view(?CONNECTION, ?DBNAME, "testview", "javascript", Views, []),
+	ct:print("view creation result: ~p~n",[Res]),
+
+	% view access
+	Cb(erlang_couchdb:invoke_view(?CONNECTION, ?DBNAME, "testview", "all",[]))
+	.
+
+viewaccess_mapreduce() ->
+	[{userdata,[{doc,"Execute map reduce View request"}]}]
+	.
+
+viewaccess_mapreduce(_Config) ->
+	%   setup
+	ok = erlang_couchdb:create_database(?CONNECTION, ?DBNAME),
+
+	ct:print("mapreduce~n",[]),
+	Mapsource = "function(doc) { if(doc.type) {emit(doc.type, doc.val)}}",
+	Reducesource = "function(keys, values) {return sum(values)}",
+
+	ResView = do_viewaccess_mapreduce(Mapsource, Reducesource),
+	ct:print("mapreduce view access result: ~p~n",[ResView]),
+
+	% assertion
+	ResView = {json,
+                               {struct,
+                                [{<<"rows">>,
+                                  [{struct,
+                                    [{<<"key">>,null},{<<"value">>,3}]}]}]}},
 
 	%   tear down
 	ok = erlang_couchdb:delete_database(?CONNECTION, ?DBNAME)
