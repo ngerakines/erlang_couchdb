@@ -14,7 +14,8 @@ The implemented functionality is really limited because I'm only really implemen
 
 A quick demo:
 
-    erlang_couchdb:create_database({"localhost", 5984}, "iplaywow").
+    erlang_couchdb:create_database({"localhost", 5984}, "iplaywow",partitioned).
+    erlang_couchdb:create_database({"localhost", 5984}, "iplaywow",not_partitioned).
     erlang_couchdb:database_info({"localhost", 5984}, "iplaywow").
     erlang_couchdb:server_info({"localhost", 5984}).
     erlang_couchdb:create_document({"localhost", 5984}, "iplaywow", [{<<"name">>, <<"Korale">>}, {<<"type">>, <<"character">>}]).
