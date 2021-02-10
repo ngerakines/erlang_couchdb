@@ -4,5 +4,5 @@
 -define(DB_PORT, 5984).
 -define(DB_HOST, {?DB_HOSTNAME, ?DB_PORT}).
 -define(DB_DATABASE, "tests").
--define(USER,"admin").
+-define(USERNAME,"admin").
 -define(PASSWORD,"1234").
