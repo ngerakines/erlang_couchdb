@@ -62,9 +62,10 @@
 
 -author("Nick Gerakines <nick@gerakines.net>").
 -version("Version: 0.2.3").
+-include("../include/erlang_couchdb.hrl").
 
 -export([server_info/1]).
--export([create_database/2, database_info/2, retrieve_all_dbs/1, delete_database/2]).
+-export([create_database/3, database_info/2, retrieve_all_dbs/1, delete_database/2]).
 -export([create_document/3, create_document/4, create_documents/3, create_attachment/5]).
 -export([retrieve_document/3, retrieve_document/4, document_revision/3]).
 -export([update_document/4, delete_document/4, delete_documents/3]).
@@ -118,13 +119,19 @@ parse_response(<<_X:1/binary,Data/binary>>) -> parse_response(Data).
 %% optionally a body. If there is a body then find it's length and send that
 %% as well. The content-type is hard-coded because this client will never
 %% send anything other than json.
+%% Added authorisation, this must be set in the hrl file, essential for couchdb 3.0.0 and up
 build_request(Type, URI, []) ->
-    list_to_binary(lists:concat([Type, " ", URI, " HTTP/1.0\r\nContent-Type: application/json\r\n\r\n"]));
+	Auth = lists:append([?USER,":",?PASSWORD]),
+	A = binary_to_list(base64:encode(Auth)),
+    list_to_binary(lists:concat([Type, " ", URI, " HTTP/1.0\r\nContent-Type: application/json\r\n","Authorization: Basic ",A,"\r\n\r\n"]));
 
 build_request(Type, URI, Body) ->
+	Auth = lists:append([?USER,":",?PASSWORD]),
+	A = binary_to_list(base64:encode(Auth)),
     erlang:iolist_to_binary([
         lists:concat([Type, " ", URI, " HTTP/1.0\r\n"
             "Content-Length: ", erlang:iolist_size(Body), "\r\n"
+	    "Authorization: Basic ",A,"\r\n"
             "Content-Type: application/json\r\n\r\n"
         ]),
         Body
@@ -132,10 +139,14 @@ build_request(Type, URI, Body) ->
 
 %% @private
 %% Added suport to change the ContentType
+%% Added authorisation, this must be set in the hrl file
 build_request(Type, URI, ContentType, Body) ->
+	Auth = lists:append([?USER,":",?PASSWORD]),
+	A = binary_to_list(base64:encode(Auth)),
     erlang:iolist_to_binary([
         lists:concat([Type, " ", URI, " HTTP/1.0\r\n"
             "Content-Length: ", erlang:iolist_size(Body), "\r\n"
+	    "Authorization: Basic ",A,"\r\n"
             "Content-Type: ", ContentType, "\r\n\r\n"
         ]),
         Body
@@ -190,9 +201,13 @@ decode_json(Body) ->
 %% @type server_address() = {Host::string(), ServerPort::integer()}
 %%
 %% @doc Create a new database.
-create_database({Server, ServerPort}, Database) when is_list(Server), is_integer(ServerPort) ->
+create_database({Server, ServerPort}, Database,Type) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database),
-    case raw_request("PUT", Server, ServerPort, Url, []) of
+    NewUrl = case Type of
+		     partitioned -> Url++"?partitioned=true";
+		     not_partitioned -> Url
+	     end,
+    case raw_request("PUT", Server, ServerPort, NewUrl, []) of
         {json, {struct, [{<<"ok">>, true}]}} -> ok;
         Other -> {error, Other}
     end.

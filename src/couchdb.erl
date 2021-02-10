@@ -39,10 +39,15 @@
 -compile(export_all).
 
 
-create_database(Name) ->
-    erlang_couchdb:create_database(?DB_HOST, Name).
-create_database(Server, Name) ->
-    erlang_couchdb:create_database(Server, Name).
+create_database(Name, Type) ->
+    erlang_couchdb:create_database(?DB_HOST, Name, Type).
+create_database(Server, Name, Type) ->
+    erlang_couchdb:create_database(Server, Name, Type).
+
+delete_database(Name) ->
+	erlang_couchdb:delete_database(?DB_HOST, Name).
+delete_database(Server, Name) ->
+	erlang_couchdb:delete_database(Server, Name).
 
 database_info(Name) ->
     erlang_couchdb:database_info(?DB_HOST, Name).
@@ -89,11 +94,11 @@ update_document(ID, Rev, Doc) ->
     Doc2 = update_doc_fields(Document, Doc),
     replace_document(ID, Rev, Doc2).
 update_document(Db, ID, Rev, Doc) ->
-    {json, Document} = retrieve_document(ID),
+    {json, Document} = retrieve_document(Db,ID),
     Doc2 = update_doc_fields(Document, Doc),
     replace_document(?DB_HOST, Db, ID, Rev, Doc2).
 update_document(Server, Db, ID, Rev, Doc) ->
-    {json, Document} = retrieve_document(ID),
+    {json, Document} = retrieve_document(Db,ID),
     Doc2 = update_doc_fields(Document, Doc),
     replace_document(Server, Db, ID, Rev, Doc2).
 
