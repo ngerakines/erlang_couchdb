@@ -66,7 +66,7 @@
 
 -export([server_info/1]).
 -export([create_database/3, database_info/2, retrieve_all_dbs/1, delete_database/2]).
--export([create_document/3, create_document/4, create_documents/3, create_attachment/5]).
+-export([create_document/3, create_document/4, create_documents/3, create_attachment/5, create_attachment/6]).
 -export([retrieve_document/3, retrieve_document/4, document_revision/3]).
 -export([update_document/4, delete_document/4, delete_documents/3]).
 -export([create_view/5, create_view/6, invoke_view/5, invoke_multikey_view/6, load_view/4]).
@@ -175,9 +175,13 @@ build_uri(Database, Request, Attributes) ->
     QueryString = build_querystring(Attributes),
     lists:concat(["/", Database, "/", Request, QueryString]).
 
+
 %% @private
+view_uri({Database,Partition}, ViewName, ViewId, Args) ->
+    lists:concat(["/", Database, "/_partition/", Partition, "/_design/", ViewName, "/_view/", ViewId, build_querystring(Args)]);
 view_uri(Database, ViewName, ViewId, Args) ->
     lists:concat(["/", Database, "/_design/", ViewName, "/_view/", ViewId, build_querystring(Args)]).
+
 
 %% @private
 build_querystring([]) -> [];
@@ -254,16 +258,26 @@ retrieve_all_dbs({Server, ServerPort}) when is_list(Server), is_integer(ServerPo
 %% @spec create_attachment(DBServer::server_address(), Database::string(), DocumentID::string(), File::string(), ContentType::string()) -> {"ok": true, "id": "document", "rev": Rev::string()}
 %%
 %% @doc Create a new attachment document.
+create_attachment({Server, ServerPort}, Database, {DocumentID, AttachmentName}, File, ContentType, Revision) ->
+    {ok, Body} = file:read_file(File),
+    Url = build_uri(Database, DocumentID ++ "/" ++ AttachmentName, [{rev, Revision}]),
+    erlang_couchdb:raw_request("PUT", Server, ServerPort, Url, ContentType, Body);
+create_attachment({Server, ServerPort}, Database, DocumentID, File, ContentType, Revision) ->
+    {ok, Body} = file:read_file(File),
+    Url = build_uri(Database, DocumentID ++ "/attachment", [{rev, Revision}]),
+     erlang_couchdb:raw_request("PUT", Server, ServerPort, Url, ContentType, Body).
 create_attachment({Server, ServerPort}, Database, DocumentID, File, ContentType) ->
     {ok, Body} = file:read_file(File),
     Url = build_uri(Database, DocumentID ++ "/attachment"),
-    erlang_couchdb:raw_request("PUT", Server, ServerPort, Url, ContentType, Body).
+     erlang_couchdb:raw_request("PUT", Server, ServerPort, Url, ContentType, Body).
 
-%% @spec create_document(DBServer::server_address(), Database::string(), Attributes::any()) ->  {json, Response::any()} | {raw, Other::any()}
+
+%% @spec create_document(DBServer::server_address(), {Database::string(),Partition::string()}|Database::string(), Attributes::any()) ->  {json, Response::any()} | {raw, Other::any()}
 %%
 %% @doc Create a new document. This function will create a document with a
 %% list of attributes and leaves it up to the server to create an id for it.
 %% The attributes should be a list of binary key/value tuples.
+
 create_document({Server, ServerPort}, Database, Attributes) when is_list(Server), is_integer(ServerPort), is_list(Attributes) ->
     create_document({Server, ServerPort}, Database, {struct, Attributes});
 create_document({Server, ServerPort}, Database, {struct, _} = Obj) when is_list(Server), is_integer(ServerPort) ->
@@ -271,7 +285,8 @@ create_document({Server, ServerPort}, Database, {struct, _} = Obj) when is_list(
     JSON = list_to_binary(mochijson2:encode(Obj)),
     raw_request("POST", Server, ServerPort, Url, JSON).
 
-%% @spec create_document(DBServer::server_address(), Database::string(), DocumentID::string(), Attributes::any()) ->  {json, Response::any()} | {raw, Other::any()}
+
+%% @spec create_document(DBServer::server_address(), {Database::string(), Partition::string()}|Database::string(), DocumentID::string(), Attributes::any()) ->  {json, Response::any()} | {raw, Other::any()}
 %%
 %% @doc Create a new document with a specific document ID. This is just an
 %% accessor function to update_document/4 when the intent is to create a 
@@ -329,7 +344,7 @@ update_document({Server, ServerPort}, Database, DocID, {struct,_} = Obj) when is
     raw_request("PUT", Server, ServerPort, Url, JSON);
 update_document({Server, ServerPort}, Database, DocID, Attributes) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database, DocID),
-    JSON = list_to_binary(mochijson2:encode({struct, Attributes})),
+     JSON = list_to_binary(mochijson2:encode({struct, Attributes})),
     raw_request("PUT", Server, ServerPort, Url, JSON).
 
 %% @doc Deletes a given document by id and revision.
