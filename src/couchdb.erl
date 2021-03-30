@@ -39,10 +39,15 @@
 -compile(export_all).
 
 
-create_database(Name) ->
-    erlang_couchdb:create_database(?DB_HOST, Name).
-create_database(Server, Name) ->
-    erlang_couchdb:create_database(Server, Name).
+create_database(Name, Type) ->
+    erlang_couchdb:create_database(?DB_HOST, Name, Type).
+create_database(Server, Name, Type) ->
+    erlang_couchdb:create_database(Server, Name, Type).
+
+delete_database(Name) ->
+	erlang_couchdb:delete_database(?DB_HOST, Name).
+delete_database(Server, Name) ->
+	erlang_couchdb:delete_database(Server, Name).
 
 database_info(Name) ->
     erlang_couchdb:database_info(?DB_HOST, Name).
@@ -89,11 +94,11 @@ update_document(ID, Rev, Doc) ->
     Doc2 = update_doc_fields(Document, Doc),
     replace_document(ID, Rev, Doc2).
 update_document(Db, ID, Rev, Doc) ->
-    {json, Document} = retrieve_document(ID),
+    {json, Document} = retrieve_document(Db,ID),
     Doc2 = update_doc_fields(Document, Doc),
     replace_document(?DB_HOST, Db, ID, Rev, Doc2).
 update_document(Server, Db, ID, Rev, Doc) ->
-    {json, Document} = retrieve_document(ID),
+    {json, Document} = retrieve_document(Db,ID),
     Doc2 = update_doc_fields(Document, Doc),
     replace_document(Server, Db, ID, Rev, Doc2).
 
@@ -111,6 +116,38 @@ replace_document(Db, ID, Rev, Doc) ->
     erlang_couchdb:update_document(?DB_HOST, Db, ID, [{<<"_rev">>, list_to_binary(Rev)} | Doc]).
 replace_document(Server, Db, ID, Rev, Doc) ->
     erlang_couchdb:update_document(Server, Db, ID, [{<<"_rev">>, list_to_binary(Rev)} | Doc]).
+
+%% @spec create_attachment(ID::string(), Path::string(), Type::string()) -> ok | {error, Reason::any()}
+%%
+%% @doc create an attachment for a document, it must be read from a file.
+%% Pass only ID or you can pass an attachment name to be saved.
+
+create_attachment({ID,AttachmentName}, Path, Type) ->
+ {json, Document} = retrieve_document(ID),
+ Rev = get_rev(Document),
+ erlang_couchdb:create_attachment(?DB_HOST, ?DB_DATABASE, {ID,AttachmentName}, Path, Type, Rev);
+create_attachment(ID, Path, Type) ->
+ {json, Document} = retrieve_document(ID),
+ Rev = get_rev(Document),
+ erlang_couchdb:create_attachment(?DB_HOST, ?DB_DATABASE, ID, Path, Type, Rev).
+create_attachment(Db, {ID,AttachmentName}, Path, Type) ->
+ {json, Document} = retrieve_document(Db, ID),
+ Rev = get_rev(Document),
+ erlang_couchdb:create_attachment(?DB_HOST, Db, {ID,AttachmentName}, Path, Type, Rev);
+create_attachment(Db, ID, Path, Type) ->
+ {json, Document} = retrieve_document(Db, ID),
+ Rev = get_rev(Document),
+ erlang_couchdb:create_attachment(?DB_HOST, Db, ID, Path, Type, Rev).
+create_attachment(Server, Db, {ID,AttachmentName}, Path, Type) ->
+ {json, Document} = retrieve_document(Server, Db, ID),
+ Rev = get_rev(Document),
+ erlang_couchdb:create_attachment(Server, Db, {ID,AttachmentName}, Path, Type, Rev);
+create_attachment(Server, Db, ID, Path, Type) ->
+ {json, Document} = retrieve_document(Server, Db, ID),
+ Rev = get_rev(Document),
+ erlang_couchdb:create_attachment(Server, Db, ID, Path, Type, Rev).
+
+
 
 %% @spec replace_document(ID::string()) ->  ok | {error, Reason::any()}
 %%

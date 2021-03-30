@@ -62,10 +62,11 @@
 
 -author("Nick Gerakines <nick@gerakines.net>").
 -version("Version: 0.2.3").
+-include("../include/erlang_couchdb.hrl").
 
 -export([server_info/1]).
--export([create_database/2, database_info/2, retrieve_all_dbs/1, delete_database/2]).
--export([create_document/3, create_document/4, create_documents/3, create_attachment/5]).
+-export([create_database/3, database_info/2, retrieve_all_dbs/1, delete_database/2]).
+-export([create_document/3, create_document/4, create_documents/3, create_attachment/5, create_attachment/6]).
 -export([retrieve_document/3, retrieve_document/4, document_revision/3]).
 -export([update_document/4, delete_document/4, delete_documents/3]).
 -export([create_view/5, create_view/6, invoke_view/5, invoke_multikey_view/6, load_view/4]).
@@ -118,13 +119,19 @@ parse_response(<<_X:1/binary,Data/binary>>) -> parse_response(Data).
 %% optionally a body. If there is a body then find it's length and send that
 %% as well. The content-type is hard-coded because this client will never
 %% send anything other than json.
+%% Added authorisation, this must be set in the hrl file, essential for couchdb 3.0.0 and up
 build_request(Type, URI, []) ->
-    list_to_binary(lists:concat([Type, " ", URI, " HTTP/1.0\r\nContent-Type: application/json\r\n\r\n"]));
+	Auth = lists:append([?USER,":",?PASSWORD]),
+	A = binary_to_list(base64:encode(Auth)),
+    list_to_binary(lists:concat([Type, " ", URI, " HTTP/1.0\r\nContent-Type: application/json\r\n","Authorization: Basic ",A,"\r\n\r\n"]));
 
 build_request(Type, URI, Body) ->
+	Auth = lists:append([?USER,":",?PASSWORD]),
+	A = binary_to_list(base64:encode(Auth)),
     erlang:iolist_to_binary([
         lists:concat([Type, " ", URI, " HTTP/1.0\r\n"
             "Content-Length: ", erlang:iolist_size(Body), "\r\n"
+	    "Authorization: Basic ",A,"\r\n"
             "Content-Type: application/json\r\n\r\n"
         ]),
         Body
@@ -132,10 +139,14 @@ build_request(Type, URI, Body) ->
 
 %% @private
 %% Added suport to change the ContentType
+%% Added authorisation, this must be set in the hrl file
 build_request(Type, URI, ContentType, Body) ->
+	Auth = lists:append([?USER,":",?PASSWORD]),
+	A = binary_to_list(base64:encode(Auth)),
     erlang:iolist_to_binary([
         lists:concat([Type, " ", URI, " HTTP/1.0\r\n"
             "Content-Length: ", erlang:iolist_size(Body), "\r\n"
+	    "Authorization: Basic ",A,"\r\n"
             "Content-Type: ", ContentType, "\r\n\r\n"
         ]),
         Body
@@ -164,9 +175,13 @@ build_uri(Database, Request, Attributes) ->
     QueryString = build_querystring(Attributes),
     lists:concat(["/", Database, "/", Request, QueryString]).
 
+
 %% @private
+view_uri({Database,Partition}, ViewName, ViewId, Args) ->
+    lists:concat(["/", Database, "/_partition/", Partition, "/_design/", ViewName, "/_view/", ViewId, build_querystring(Args)]);
 view_uri(Database, ViewName, ViewId, Args) ->
     lists:concat(["/", Database, "/_design/", ViewName, "/_view/", ViewId, build_querystring(Args)]).
+
 
 %% @private
 build_querystring([]) -> [];
@@ -190,9 +205,13 @@ decode_json(Body) ->
 %% @type server_address() = {Host::string(), ServerPort::integer()}
 %%
 %% @doc Create a new database.
-create_database({Server, ServerPort}, Database) when is_list(Server), is_integer(ServerPort) ->
+create_database({Server, ServerPort}, Database,Type) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database),
-    case raw_request("PUT", Server, ServerPort, Url, []) of
+    NewUrl = case Type of
+		     partitioned -> Url++"?partitioned=true";
+		     not_partitioned -> Url
+	     end,
+    case raw_request("PUT", Server, ServerPort, NewUrl, []) of
         {json, {struct, [{<<"ok">>, true}]}} -> ok;
         Other -> {error, Other}
     end.
@@ -239,16 +258,26 @@ retrieve_all_dbs({Server, ServerPort}) when is_list(Server), is_integer(ServerPo
 %% @spec create_attachment(DBServer::server_address(), Database::string(), DocumentID::string(), File::string(), ContentType::string()) -> {"ok": true, "id": "document", "rev": Rev::string()}
 %%
 %% @doc Create a new attachment document.
+create_attachment({Server, ServerPort}, Database, {DocumentID, AttachmentName}, File, ContentType, Revision) ->
+    {ok, Body} = file:read_file(File),
+    Url = build_uri(Database, DocumentID ++ "/" ++ AttachmentName, [{rev, Revision}]),
+    erlang_couchdb:raw_request("PUT", Server, ServerPort, Url, ContentType, Body);
+create_attachment({Server, ServerPort}, Database, DocumentID, File, ContentType, Revision) ->
+    {ok, Body} = file:read_file(File),
+    Url = build_uri(Database, DocumentID ++ "/attachment", [{rev, Revision}]),
+     erlang_couchdb:raw_request("PUT", Server, ServerPort, Url, ContentType, Body).
 create_attachment({Server, ServerPort}, Database, DocumentID, File, ContentType) ->
     {ok, Body} = file:read_file(File),
     Url = build_uri(Database, DocumentID ++ "/attachment"),
-    erlang_couchdb:raw_request("PUT", Server, ServerPort, Url, ContentType, Body).
+     erlang_couchdb:raw_request("PUT", Server, ServerPort, Url, ContentType, Body).
 
-%% @spec create_document(DBServer::server_address(), Database::string(), Attributes::any()) ->  {json, Response::any()} | {raw, Other::any()}
+
+%% @spec create_document(DBServer::server_address(), {Database::string(),Partition::string()}|Database::string(), Attributes::any()) ->  {json, Response::any()} | {raw, Other::any()}
 %%
 %% @doc Create a new document. This function will create a document with a
 %% list of attributes and leaves it up to the server to create an id for it.
 %% The attributes should be a list of binary key/value tuples.
+
 create_document({Server, ServerPort}, Database, Attributes) when is_list(Server), is_integer(ServerPort), is_list(Attributes) ->
     create_document({Server, ServerPort}, Database, {struct, Attributes});
 create_document({Server, ServerPort}, Database, {struct, _} = Obj) when is_list(Server), is_integer(ServerPort) ->
@@ -256,7 +285,8 @@ create_document({Server, ServerPort}, Database, {struct, _} = Obj) when is_list(
     JSON = list_to_binary(mochijson2:encode(Obj)),
     raw_request("POST", Server, ServerPort, Url, JSON).
 
-%% @spec create_document(DBServer::server_address(), Database::string(), DocumentID::string(), Attributes::any()) ->  {json, Response::any()} | {raw, Other::any()}
+
+%% @spec create_document(DBServer::server_address(), {Database::string(), Partition::string()}|Database::string(), DocumentID::string(), Attributes::any()) ->  {json, Response::any()} | {raw, Other::any()}
 %%
 %% @doc Create a new document with a specific document ID. This is just an
 %% accessor function to update_document/4 when the intent is to create a 
@@ -314,7 +344,7 @@ update_document({Server, ServerPort}, Database, DocID, {struct,_} = Obj) when is
     raw_request("PUT", Server, ServerPort, Url, JSON);
 update_document({Server, ServerPort}, Database, DocID, Attributes) when is_list(Server), is_integer(ServerPort) ->
     Url = build_uri(Database, DocID),
-    JSON = list_to_binary(mochijson2:encode({struct, Attributes})),
+     JSON = list_to_binary(mochijson2:encode({struct, Attributes})),
     raw_request("PUT", Server, ServerPort, Url, JSON).
 
 %% @doc Deletes a given document by id and revision.
